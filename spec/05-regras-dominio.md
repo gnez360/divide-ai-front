@@ -13,7 +13,7 @@
 | Editar **próprio** nome/avatar | ✅ | ✅ |
 | Entrar / sair da sala | ✅ | ✅ |
 | Fechar minha parte | ✅ | ✅ |
-| **Resolver pendência "não informou"** | ✅ | ❌ |
+| **Resolver pendências de participantes** ("não informou" / "não confirmou" / aguardando entrada) | ✅ *(com origem visível)* | ❌ |
 | **Fechar conta** | ✅ | ✅ *(somente com ZERO pendências)* |
 | Remover participante da conta | ❌ | ❌ *(fora do MVP — ver 10)* |
 
@@ -29,7 +29,7 @@ Justificativa: edição aberta reduz gargalo (o criador pode sair da mesa); a pr
 
 ### TTL
 
-- **MVP: sem expiração automática** (decisão). Registrado em `10-decisoes-aberto.md` com risco de acúmulo de fotos/dados.
+- **MVP: conta sem expiração automática** (decisão). A **foto** da comanda é purgada **48h após FINALIZADA** (10-D1; `09 §5`).
 - Conta finalizada continua acessível para leitura (resumo), sem edição.
 
 ---
@@ -38,10 +38,10 @@ Justificativa: edição aberta reduz gargalo (o criador pode sair da mesa); a pr
 
 Sem login, a identidade é por **token de dispositivo**:
 
-1. Ao entrar (tela 12), servidor emite `dispositivoToken` guardado no dispositivo (localStorage/cookie).
+1. Ao entrar (tela 12), servidor emite `dispositivoToken` guardado em **cookie `HttpOnly`** do dispositivo (ver `09 §4` — nunca `localStorage`).
 2. Reabrir o link no **mesmo dispositivo** → reconecta ao mesmo participante (mesmo nome/avatar, mesmo `participanteId`).
 3. **Outro dispositivo** → novo participante; se o nome digitado coincidir com vaga/convidado, **vincula à vaga** em vez de duplicar.
-4. Colisão de nomes ("2 Marias"): ids são distintos; exibição diferencia por avatar. Nunca vincular por nome sozinho.
+4. Colisão de nomes ("2 Marias" fora de vaga): ids são distintos; exibição diferencia por avatar. **Decisão D6 (mantida na 2ª rodada): nome igual à vaga pré-cadastrada VINCULA** (nome + token de dispositivo, nunca nome sozinho como credencial de sessão) — o risco de alguém reivindicar vaga homônima é **aceito** e registrado (`10` D6, `09 §4`); a pendência de confirmação obrigatória (§7) é a mitigação.
 
 Atributos por participante: `id`, `nomeExibido`, `avatar` (opcional), `estado`, `presença`, `consumoConfirmado`, estado de fechamento individual.
 
@@ -55,7 +55,7 @@ Atributos por participante: `id`, `nomeExibido`, `avatar` (opcional), `estado`, 
   - na lista de divisão: rótulo "⏳ aguardando entrada";
   - ao entrar, a pessoa vê o que foi marcado nela e **pode remover** as atribuições.
 - Entrar por link com nome igual ao de um placeholder (ou usando `tokenConvite`) → vincula; caso contrário, cria novo participante **enquanto houver vaga**. Sem vaga: "Mesa cheia" (erro).
-- Placeholder que recebe itens atribuídos e **nunca entra** → pendência "não informou" resolvida pelo criador com **[Desvincular consumos]** (§7): os itens voltam a `NAO_DIVIDIDO` e seguem pelo fluxo normal.
+- Placeholder que recebe itens atribuídos e **nunca entra** → pendência `PARTICIPANTE_AGUARDANDO_ENTRADA` (bloqueia o fechamento) resolvida pelo criador com **[Desvincular consumos]** (§7): os itens voltam a `NAO_DIVIDIDO`/incompleto e seguem pelo fluxo normal. Placeholder **sem atribuição** é só vaga vazia — **não** gera pendência.
 - Remoção de vaga/placeholder pelo criador: permitida **antes** da divisão começar; depois, remover alguém com atribuições é bloqueado (transformaria o consumo em órfão). Definido: **fora do MVP remover participantes** — ver `10`.
 
 ---
@@ -83,6 +83,7 @@ A comanda pode ser editada por qualquer participante **a qualquer momento** (ant
 ### 6.2 Trocar modo de divisão
 
 - **Troca descarta a divisão atual com confirmação** (decisão): "Trocar o modo vai apagar a divisão atual de N pessoas. Continuar?"
+- A troca é **atômica**: descarte + novo modo em **um único commit** — se falhar (409/422/offline), nada muda (modo e divisão antigos permanecem). Nunca meio-estado "modo novo com divisão velha" (3.14).
 - Sem conversão automática.
 
 ### 6.3 Parte conferida × edição
@@ -110,20 +111,63 @@ Dois conceitos separados:
 - **Atribuição** (quem deve o quê): qualquer participante pode atribuir itens/unidades a **qualquer um**, inclusive a quem não entrou.
 - **Confirmação** (`consumoConfirmado`): só o **próprio** participante confirma o seu consumo (tocar em uma divisão que o afete ou [Confirmar meu consumo] na tela 22). **Atribuição feita por terceiros não confirma.**
 
+### 7.1 Tabela normativa (P0-16 · decisão 1 da 2ª rodada)
+
+| Participante | Atribuído a ele? | `consumoConfirmado`? | Estado | Bloqueia fechamento? |
+|---|---|---|---|---|
+| `CONVIDADO` | não | — | `AGUARDANDO_ENTRADA` | **não** (vaga vazia) |
+| `CONVIDADO` | sim | — | `AGUARDANDO_ENTRADA` | **sim** (pendência `PARTICIPANTE_AGUARDANDO_ENTRADA`) |
+| `ATIVO` | não | não | `NAO_INFORMOU` | **sim** (pendência) |
+| `ATIVO` | sim | não | `AGUARDANDO_CONFIRMACAO` | **sim** (pendência — **acabou a aprovação tácita**) |
+| `ATIVO` | qualquer | sim | `CONFIRMADO` | não |
+
 Estados na UI, sempre diferenciados:
 
 | Estado | Significado | UI |
 |---|---|---|
-| `SEM_CONSUMO` | ele próprio informou R$ 0,00 | "R$ 0,00 ✓" neutro |
-| `AGUARDANDO_CONFIRMACAO` | valor atribuído por outro, ele ainda não revisou | "⏳ Aguardando confirmação" |
-| `NAO_INFORMOU` (`!consumoConfirmado`, nada atribuído) | ainda não mexeu nem revisou | "⚠ Não informou" |
+| `SEM_CONSUMO` | ele próprio informou R$ 0,00 (caso de `CONFIRMADO`) | "R$ 0,00 ✓" neutro |
+| `AGUARDANDO_CONFIRMACAO` | valor atribuído por outro, ele ainda não revisou → **pendência** | "⏳ Aguardando confirmação" |
+| `NAO_INFORMOU` | nada atribuído e não mexeu → pendência | "⚠ Não informou" |
+| resolvido pelo criador | `origemConfirmacao = RESOLUCAO_CRIADOR` | "✓ Resolvido por Guilherme (em nome de Ana)" |
 
-- `NAO_INFORMOU` gera **pendência**; `SEM_CONSUMO` e `AGUARDANDO_CONFIRMACAO` não geram.
-- Pendência "não informou" só é resolvida **pelo criador**, com escolha explícita (nunca automático — princípio 8), 4 opções:
-  - **[Marcar R$ 0,00]** → `SEM_CONSUMO`;
-  - **[Dividir entre todos]** → distribui o valor dele entre os demais;
-  - **[Personalizar]** → atribuição manual;
-  - **[Desvincular consumos]** → itens/unidades que outras pessoas atribuíram a ele **voltam a `NAO_DIVIDIDO`/incompleto**; depois resolve-se cada item pelo fluxo normal (17–21). É a opção indicada para placeholder que nunca entrou.
+### 7.2 Reset de confirmação (P0-04, versão simplificada)
+
+- Qualquer mutação que **altere atribuições/partes** de um participante zera `consumoConfirmado` (→ `AGUARDANDO_CONFIRMACAO` se tem atribuição, `NAO_INFORMOU` se não tem). Nunca "mantém confirmado" um valor que mudou.
+- Mudança só de taxa/desconto **não** mexe em `consumoConfirmado` (parte recalcula, mas a pessoa já revisou o quê consome), embora reabra `PARTE_CONFERIDA` pela via §6.3.
+- `origemConfirmacao`: `PROPRIO_PARTICIPANTE` (ação dela) ou `RESOLUCAO_CRIADOR` (override — sempre visível).
+
+### 7.3 Resolução pelo criador (escolha explícita, nunca automática — princípio 8)
+
+Pendência `NAO_INFORMOU` (nada atribuído):
+
+- **[Marcar R$ 0,00]** → `SEM_CONSUMO` (resolve);
+- **[Personalizar]** → leva ao fluxo de itens (atribui consumo a ele);
+- **[Desvincular consumos]** → **etapa**, ver abaixo.
+
+Pendência `AGUARDANDO_CONFIRMACAO` (atribuído):
+
+- **[Confirmar em nome dela]** → `consumoConfirmado = true` + `origemConfirmacao = RESOLUCAO_CRIADOR`, exibido como "✓ Resolvido por X" (resolve);
+- **[Dividir entre todos]** → algoritmo §7.4 (resolve, se não sobrar furo);
+- **[Personalizar]** → leva ao fluxo de itens;
+- **[Desvincular consumos]** → **etapa**.
+
+**[Desvincular consumos] é etapa, não resolução** (3.13): remove as atribuições do participante e **mantém a pendência aberta**; o diálogo avança para a segunda escolha até resolver de fato:
+
+| Modo do item | Efeito do desvincular |
+|---|---|
+| `ENTRE_PESSOAS` | sai da seleção; Maior Resto redistribui entre os restantes; sem restante → `NAO_DIVIDIDO` |
+| `UNIDADES` | unidades dele voltam ao pool → `DIVISAO_INCOMPLETA` (pendência de unidades) |
+| `PERSONALIZADO` | valores dele viram "faltando" → `DIVISAO_INCOMPLETA` |
+
+### 7.4 Algoritmo de [Dividir entre todos]
+
+Para **cada item** onde o participante tem atribuição, o que era dele é redistribuído:
+
+- `ENTRE_PESSOAS`: participante sai da seleção; as partes são redistribuídas entre os demais **que já têm atribuição no item** via Maior Resto (modo preservado);
+- `UNIDADES`: unidades dele voltam ao pool não distribuído (item → incompleto; o criador distribui);
+- `PERSONALIZADO`: soma dos valores dele vira "faltando" (item → incompleto).
+
+Sem itens a redistribuir (não havia atribuição) → a opção não existe nessa pendência.
 
 ---
 
@@ -138,7 +182,8 @@ Estados na UI, sempre diferenciados:
 
 ## 9. Fechar a conta
 
-- **Qualquer participante** pode fechar (decisão), mas o botão só habilita com **ZERO pendências** — a lista é a coleção estruturada `Pendencia[]` de `02` (tipos: item não dividido · unidades sobrando · divisão personalizada incompleta · `PARTICIPANTE_NAO_INFORMOU` · `COBRANCA_NAO_CONFIRMADA` · `DIVERGENCIA_COMANDA`). O frontend **não infere** pendências varrendo o estado: consome a lista servida.
+- **Qualquer participante** pode fechar (decisão), mas o botão só habilita com **ZERO pendências** — a lista é a coleção estruturada `Pendencia[]` de `02` (tipos: `ITEM_NAO_DIVIDIDO` · `UNIDADES_NAO_DISTRIBUIDAS` · `DIVISAO_INCOMPLETA` · `PARTICIPANTE_NAO_INFORMOU` · `PARTICIPANTE_NAO_CONFIRMOU` · `PARTICIPANTE_AGUARDANDO_ENTRADA` · `COBRANCA_NAO_CONFIRMADA` · `DIVERGENCIA_COMANDA`). O frontend **não infere** pendências varrendo o estado: consome a lista servida.
+- O fechamento é **CAS no servidor** (`08 §4.3`): `estado ≠ FINALIZADA ∧ contaRevisao == base ∧ pendenciasAtivas == 0` — pendência que surge entre leitura e commit derruba a tentativa com `serverState`.
 - Confirmação obrigatória: "Depois disso, a divisão será bloqueada."
 - **Nota:** fechar conta é uma ação **operacional** (habilita com zero pendências) — **não** exige confirmação ou fechamento de parte de todos os participantes; quem não conferiu sua parte pode seguir com ela aberta.
 - **FINALIZADA é permanente no MVP** (sem reabertura — ver `10`).
@@ -156,4 +201,4 @@ Estados na UI, sempre diferenciados:
 ## 11. Remoção/saída
 
 - Sair da sala (fechar aba) ≠ sair da conta: participante permanece com dados.
-- "Sair da conta neste dispositivo" (limpar token): permite que outra pessoa use o celular — **fora do MVP**, ver `10`.
+- **"Sair e apagar dados deste dispositivo" (no MVP — decisão 5 da 2ª rodada)**: revoga a sessão no servidor, apaga o cookie de dispositivo e limpa o cache local (fotos/dados em cache) **do dispositivo**; os dados da conta no servidor ficam intactos. Depois disso, re-entrar exige o link de novo. Exposto na tela 13 (conta) e no menu global.

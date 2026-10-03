@@ -58,6 +58,7 @@ No MVP a camada PAGAMENTO existe no modelo de dados (para não remodelar depois)
 6. O realtime é visual, não intrusivo (atualização direta nos cards, não toast por evento).
 7. O OCR deve ser editável de maneira extremamente rápida.
 8. **Nenhuma cobrança deve ser presumida silenciosamente** (nenhuma taxa inventada, nenhum item atribuído automaticamente).
+9. **Nada é confirmado por silêncio**: atribuição feita por terceiros não confirma o consumo; a conta só fecha com zero pendências e resoluções explícitas (`05` §7).
 
 ---
 
@@ -65,10 +66,10 @@ No MVP a camada PAGAMENTO existe no modelo de dados (para não remodelar depois)
 
 | Atores | Descrição |
 |---|---|
-| **Criador** | Quem iniciou a conta. Pré-cadastra participantes, edita comanda, resolve pendências de "não informou". |
+| **Criador** | Quem iniciou a conta (identificado **antes** da comanda — `10` D15). Pré-cadastra participantes, edita comanda, resolve pendências de participantes ("não informou"/"não confirmou"/aguardando entrada) com **origem visível** ("Resolvido por X"). |
 | **Participante** | Quem entra por link/QR ou foi pré-cadastro pelo criador. Sem cadastro, sem login. |
 
-**No MVP, criador e participante têm as mesmas permissões de edição de comanda e divisão** (decisão: edição aberta). As diferenças do criador são: pré-cadastro de participantes e resolução explícita de pendências de quem não informou (ver `05-regras-dominio.md`).
+**No MVP, criador e participante têm as mesmas permissões de edição de comanda e divisão** (decisão: edição aberta). As diferenças do criador são: pré-cadastro de participantes e resolução explícita de pendências de terceiros (ver `05-regras-dominio.md`).
 
 O criador **também é um participante** da divisão.
 
@@ -85,8 +86,10 @@ O criador **também é um participante** da divisão.
 - Presença, tempo real, indicador de sincronização, estado offline honesto.
 - Três modos de divisão: entre pessoas / distribuir unidades / personalizar (valor ou %).
 - Minha parte, visão de pessoas, detalhe por pessoa, fechar minha parte.
-- Pendências, revisão final, fechamento da conta, resumo compartilhável.
-- Regras de cálculo: taxas, descontos, distribuição proporcional, arredondamento determinístico, garantia Σ = total.
+- Pendências (inclui "não confirmou" bloqueando), revisão final, fechamento da conta, resumo compartilhável.
+- **[Ajuste de comanda]** na divergência > 5¢ (cobrança explícita, sem "Confirmar assim mesmo").
+- **[Sair e apagar dados deste dispositivo]** (revoga sessão + cache local).
+- Regras de cálculo: taxas, descontos, distribuição proporcional, arredondamento determinístico, invariantes (parcial e de fechamento).
 
 ### Fora do MVP
 
@@ -99,7 +102,7 @@ O criador **também é um participante** da divisão.
 
 ### Pós-MVP registrado em `10-decisoes-aberto.md`
 
-TTL da conta/foto (sem TTL no MVP), provedor de OCR, provedor de realtime, histórico, cardápio.
+Purga da foto 48h pós-fechamento (decidida — `10` D1), TTL da conta por inatividade, provedor de OCR, provedor de realtime, histórico, cardápio.
 
 ---
 

@@ -72,7 +72,7 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 - **Objetivo:** iniciar ou entrar em uma conta.
 - **Conteúdo:** "Conta Juntos — Divida a conta sem complicação" · [📷 Nova conta] · [🔗 Entrar em uma conta] · "Como funciona?" (intro curta) · Histórico (futuro, oculto no MVP).
 - **Pré:** nenhuma.
-- **Transições:** Nova conta → 02 · Entrar → 12 (campo de link/código).
+- **Transições:** Nova conta → **mini-step "Como devemos te chamar?"** (nome + avatar do criador — o participante CRIADOR é criado **antes** da comanda, então `criadoPor` sempre existe; ver `10` D15) → 02 · Entrar → 12 (campo de **link colado/QR**; o código curto da tela é só display do link real — 09 §4).
 
 ### 02 Capturar comanda
 - **Ator:** criador.
@@ -98,14 +98,15 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 ### 05 Falha do OCR → entrada manual *(novo)*
 - **Ator:** criador.
 - **Objetivo:** garantir caminho de entrada mesmo sem OCR.
-- **Conteúdo:** "Não conseguimos ler sua comanda." · [Tentar de novo] (volta ao 04) · [Digitar manualmente] · resumo do erro.
+- **Conteúdo:** "Não conseguimos ler sua comanda." · [Tentar de novo] (volta ao 04) · [Digitar manualmente] · resumo do erro · nota "Você informará os itens e o **Total impresso** na próxima tela."
 - **Pré:** OCR falhou, ou criador escolheu "digitar manualmente" no 04.
-- **Transições:** Digitar → **06 com lista vazia** (com estado vazio + [Adicionar item]) · Tentar → 04.
+- **Transições:** Digitar → **06 com lista vazia** (com estado vazio + [Adicionar item] + **campo Total impresso obrigatório** — é a META do fechamento; nunca presumir total ausente) · Tentar → 04.
 
 ### 06 Conferir comanda ⭐
 - **Ator:** criador (e, depois do convite, qualquer participante).
 - **Objetivo:** revisar tudo que o OCR (ou a digitação) produziu. Tela mais importante do produto.
-- **Conteúdo:** lista de itens (nome, qtd × unitário, total) · seção Taxas/descontos · Subtotal · Total · [Confirmar comanda] · **[Ver comanda]** (abre a imagem original para validar o OCR — ex.: conferir se "8,90" não virou "89,00"; oculto se não houver imagem) · ações por linha: editar (07) · "+" adicionar item · mesclar itens duplicados (aparece só se houver duplicatas).
+- **Conteúdo:** lista de itens (nome, qtd × unitário/total conforme `modoPreco` — 07 §1) · seção Taxas/descontos · Subtotal · **Total impresso (editável — é a META; obrigatório quando veio do fallback)** · [Confirmar comanda] · **[Ver comanda]** (abre a imagem original para validar o OCR — ex.: conferir se "8,90" não virou "89,00"; oculto se não houver imagem) · ações por linha: editar (07) · "+" adicionar item · mesclar itens duplicados (aparece só se houver duplicatas).
+  - **Reabertura:** quando a conta já está ativa, a 06 é alcançada pelo **[Editar comanda]** (13/14/15); sair da tela revalida a divergência — se > 5¢, vira pendência `DIVERGENCIA_COMANDA` e bloqueia (07 §3), sem retrocesso de estado (06 §1).
 - **Dataset:**
   ```text
   Pizza Margherita   1 × R$ 120,00   R$ 120,00
@@ -124,15 +125,17 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 ### 07 Editar item
 - **Ator:** qualquer participante.
 - **Objetivo:** correção rápida de uma linha.
-- **Conteúdo:** bottom sheet: Nome · Quantidade (−/+) · Preço unitário · **Total (somente leitura, derivado = qtd × unitário)** · **[Ver comanda]** (zoom na imagem original — útil quando o OCR lê "8,90" como "89,00") · [Excluir item] · [Salvar]/[Cancelar]. Teclado numérico nos campos de dinheiro.
-  - **Autoridade:** o campo editável é o **unitário**; mudar a quantidade recalcula o total automaticamente (4 × 9,00 → qtd 5 → 45,00, unitário permanece 9,00). Não existe digitar "total" isoladamente.
+- **Conteúdo:** bottom sheet: Nome · Quantidade (−/+) · **Preço unitário** e **Total** (a edição é por `modoPreco` — 07 §1) · **[Ver comanda]** (zoom na imagem original — útil quando o OCR lê "8,90" como "89,00") · [Excluir item] · [Salvar]/[Cancelar]. Teclado numérico nos campos de dinheiro.
+  - **`modoPreco = UNITARIO`:** unitário editável; total derivado (4 × 9,00 → qtd 5 → 45,00, unitário permanece 9,00). Total não digita isoladamente.
+  - **`modoPreco = TOTAL_LINHA`:** **total editável** (autoridade); unitário exibido como derivado/informativo — quando `total ÷ qtd` não é exato, mostra "sem preço unitário exato" e a linha é válida (3 un · R$ 10,00). Mudar a quantidade **mantém** o total (com aviso).
+  - Trocar a autoridade é atômico com o salvar (um único commit; 08 §4).
 - **Pré:** 06 aberto.
 - **Transições:** Salvar → se reabrir parte de alguém em `PARTE_CONFERIDA` → alerta prévio do editor (`05` §6.3: "Esta alteração vai reabrir a parte de X. Deseja continuar?") → 06 (e recálculo); se o item já estava dividido → regra de `05-regras-dominio.md` (divisão remanescente preservada; excedente vira pendência) · Cancelar → 06.
 
 ### 08 Taxas e descontos
 - **Ator:** qualquer participante.
 - **Objetivo:** revisar/adicionar cobranças e descontos. **Nenhuma taxa é presumida.**
-- **Conteúdo:** por cobrança: descrição, valor, % (quando calculável), base (quando identificável), **regra de distribuição** (editável), confirmada ✓, editar/adicionar/remover.
+- **Conteúdo:** por cobrança: descrição, valor, % (quando calculável), base (quando identificável), **regra de distribuição** (editável), **conjunto de elegíveis** (quando `Igual por pessoa` — edição exige reconfirmar: 07 §2.4), origem do valor (impresso/calculado/manual), confirmada ✓, editar/adicionar/remover.
   - **Regra exibida:** `Proporcional ao consumo` (default) → aviso "Distribuída proporcionalmente ao consumo." · `Igual por pessoa` → exibição "R$ 15,00 × 6 pessoas".
   ```text
   Taxa de serviço   R$ 21,00  (10% · base R$ 210,00)  Proporcional ✓
@@ -147,15 +150,16 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 - **Ator:** qualquer participante.
 - **Objetivo:** impedir avanço com conta que não fecha.
 - **Condição de exibição:** `|Σ (itens + taxas − descontos) − total impresso| > R$ 0,05`.
-- **Conteúdo:** ⚠ "Os valores não conferem" · Calculado vs **Total impresso (meta)** · Diferença · [Corrigir] · explicação.
+- **Conteúdo:** ⚠ "Os valores não conferem" · Calculado vs **Total impresso (meta)** · Diferença · [Corrigir] · **[Ajuste de comanda]** · explicação.
   ```text
   Calculado        R$ 230,00
   Total impresso   R$ 231,00   ← meta
   Diferença          R$  1,00
-  [ Corrigir ]
+  [ Corrigir ]   [ Ajuste de comanda ]
   ```
-- **Regra:** ≤ 5¢ passa sem exibir (absorvido). Acima: **só "Corrigir"** — sem "Confirmar assim mesmo" (o total impresso é autoridade). Detalhe em `07-regras-calculo.md`.
-- **Transições:** Corrigir → 06/07/08.
+- **Regra:** ≤ 5¢ passa sem exibir (absorvido). Acima: **só [Corrigir] ou [Ajuste de comanda]** — sem "Confirmar assim mesmo" (o total impresso é autoridade).
+  - **[Ajuste de comanda]** (decisão 4 da 2ª rodada): cria a cobrança explícita "Ajuste de divergência" (TAXA se faltam / DESCONTO se sobra) que é rateada como qualquer cobrança — itens e taxas impressos intactos; depois disso Σ = impresso e a pendência some. Detalhe: `07 §3.1`.
+- **Transições:** Corrigir → 06/07/08 · Ajuste de comanda → cria cobrança e volta para 06 (pendência resolvida).
 
 ### 10 Confirmar comanda
 - **Ator:** criador.
@@ -179,13 +183,13 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 - **Ator:** convidado.
 - **Objetivo:** se identificar sem cadastro.
 - **Conteúdo:** nome do restaurante · "Como podemos te chamar?" · [nome] · avatar (opcional, set de emojis) · [Entrar na conta] · aviso "Você entrará diretamente na divisão. Não é necessário criar conta."
-- **Pré:** link/QR válido; conta não finalizada.
-- **Transições:** Entrar → 13. Se dispositivo tiver token → **entra direto como o mesmo participante** (sem pedir nome). Se nome igual a vaga pré-cadastrada → vincula à vaga.
+- **Pré:** link/QR válido.
+- **Transições:** Entrar → 13. Se dispositivo tiver token → **entra direto como o mesmo participante** (sem pedir nome). Se nome igual a vaga pré-cadastrada → vincula à vaga (D6: nome + token — `05` §3). **Conta finalizada** → abre o resumo somente leitura (26/27), sem modo de edição (3.20).
 
 ### 13 Sala de participantes
 - **Ator:** todos.
 - **Objetivo:** ver quem está na mesa; começar a dividir sem esperar.
-- **Conteúdo:** lista com avatar/nome/status (🟢 online · ⚪ offline · 🕓 aguardando entrada) · "3/6 participantes" · [Compartilhar mais pessoas] · aviso "Podem começar a dividir a conta a qualquer momento." · acesso às tabs.
+- **Conteúdo:** lista com avatar/nome/status (🟢 online · ⚪ offline · 🕓 aguardando entrada · ⏳ aguardando confirmação) · "3/6 participantes" · [Compartilhar mais pessoas] · **[Editar comanda] → 06 (modo edição)** · **[Sair e apagar dados deste dispositivo]** (decisão 5 da 2ª rodada: revoga sessão + limpa cache local; dados no servidor intactos — `05` §11) · aviso "Podem começar a dividir a conta a qualquer momento." · acesso às tabs.
 - **Pré:** participante ATIVO (ou sala visível ao criador antes dos convites).
 - **Transições:** → 14 (Itens) / 15 (Pessoas).
 
@@ -196,7 +200,7 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 ### 14 Conta — visão de itens
 - **Ator:** todos.
 - **Objetivo:** tela principal; ver estado de cada item.
-- **Conteúdo:** tabs [Itens][Pessoas] · rodapé "Total da comanda R$ 231,00" · **barra fixa "Minha parte"** (ver "Estados globais") · por item: status.
+- **Conteúdo:** tabs [Itens][Pessoas] · rodapé "Total da comanda R$ 231,00" · **barra fixa "Minha parte"** (ver "Estados globais") · **[Editar comanda] → 06 (modo edição)** · por item: status.
   ```text
   🍕 Pizza Margherita  R$ 120,00   ✓ Dividido entre 3
   🍺 Cerveja           4 × 9,00     4/4 unidades
@@ -217,11 +221,12 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
   Maria      R$ 64,90   ✓ Confirmado
   Pedro      R$ 63,80   ✓ Confirmado
   Ana        R$ 24,20   ⏳ Aguardando confirmação   ← valor atribuído por outro, ela não revisou
-  Guilherme   R$ 6,60   ✓ Confirmado
-  Carlos      R$ 6,60   ⚠ Não informou             ← nada atribuído e nada confirmado
+  Guilherme   R$  6,60   ✓ Confirmado
+  Carlos      R$  6,60   ⏳ Aguardando confirmação   ← refri atribuída, ele não revisou (pendência)
   Total     R$ 231,00
   ```
-  - **Semântica:** `✓ Confirmado` = o próprio participante revisou/confirmou. `⏳ Aguardando confirmação` = tem valor **atribuído por terceiros** mas `consumoConfirmado = false`. `⚠ Não informou` = `!consumoConfirmado` sem nada atribuído (gera pendência). `R$ 0,00 ✓` = informou explicitamente que não consumiu (não gera pendência).
+  - **Semântica:** `✓ Confirmado` = o próprio participante revisou/confirmou (ou resolvido pelo criador, com "Resolvido por X"). `⏳ Aguardando confirmação` = tem valor **atribuído por terceiros** mas `consumoConfirmado = false` → **gera pendência e bloqueia o fechamento** (decisão 1 da 2ª rodada). `⚠ Não informou` = `!consumoConfirmado` sem nada atribuído (gera pendência; ex.: vaga vazia de um convidado que não recebeu nada — não ocorre neste dataset). `R$ 0,00 ✓` = informou explicitamente que não consumiu (não gera pendência).
+  - **[Editar comanda] → 06 (modo edição)** disponível aqui também (3.19).
 - **Transições:** pessoa → 16.
 
 ### 16 Detalhe da pessoa
@@ -238,6 +243,7 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
   Serviço 10%           R$  5,90
   TOTAL                 R$ 64,90
   ```
+  - Linha extra **"Ajuste de conciliação ±R$ X,XX"** quando existir (`07 §3.1`) — itens/taxas originais nunca são alterados por ela.
 - **Transições:** editar itens da pessoa (atalho para 14/17) · voltar → 15.
 
 ### 17 Como dividir este item? ⭐
@@ -256,14 +262,16 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 ### 19 Distribuir unidades
 - **Ator:** qualquer.
 - **Conteúdo:** por pessoa stepper `− n +` · "4 de 4 distribuídas" · barra de progresso · [Confirmar] **só habilita em n/n**.
+- **Regra (P0-14):** o stepper é **local** — alterações não são persistidas a cada toque; **só [Confirmar] grava** (um único commit). Nunca existe estado persistido "5 de 4" nem `n+1/n`; sair sem confirmar descarta. Item com `modoPreco = TOTAL_LINHA` indivisível distribui pelo Maior Resto (`07 §4.2`).
 - **Dataset (cerveja):** João 1, Maria 1, Pedro 2 → 4/4.
 - **Transições:** Confirmar → 21.
 
 ### 20 Personalizar divisão
 - **Ator:** qualquer.
-- **Conteúdo:** toggle [Valor][%] · campos por participante · "Total / Dividido" · ✓ "Divisão confere" ou ⚠ "A divisão não fecha (falta R$ X)" · [Confirmar] só com soma = valor do item (tolerância 0).
+- **Conteúdo:** toggle [Valor][%] · campos por participante · "Total / Dividido" · ✓ "Divisão confere" ou ⚠ "A divisão não fecha (falta R$ X)" · [Confirmar] só com soma = valor do item (tolerância 0) · **[Salvar parcial]**.
+  - **[Salvar parcial]** (decisão D13): grava o que já foi digitado → item `DIVISAO_INCOMPLETA` + pendência "falta R$ X" — **qualquer participante pode completar depois**; [Confirmar] continua bloqueado até fechar. Nunca existe metade salva sem a pendência visível.
 - **Exemplo ilustrativo:** Sobremesa R$ 60 → João 30 / Maria 20 / Pedro 10.
-- **Transições:** Confirmar → 21.
+- **Transições:** Confirmar → 21 · Salvar parcial → 14 (item fica ⚠ incompleto).
 
 ### 21 Item dividido
 - **Ator:** todos.
@@ -291,23 +299,28 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
   ✓ Meu consumo confirmado   (ou [ Confirmar meu consumo ] se ainda não confirmou)
   [ Fechar minha parte ]
   ```
-- **Regra:** tocar em qualquer divisão que afete você **ou** [Confirmar meu consumo] → `consumoConfirmado = true`. Confirmação é do próprio participante: atribuição feita por terceiros não confirma sozinha.
+  - Linha extra **"Ajuste de conciliação ±R$ X,XX"** quando existir (`07 §3.1`).
+- **Regra:** tocar em qualquer divisão que afete você **ou** [Confirmar meu consumo] → `consumoConfirmado = true`. Confirmação é do próprio participante: atribuição feita por terceiros não confirma sozinha. **Qualquer mudança futura de atribuição zera a confirmação** (`05` §7.2).
 - **Transições:** → 24 · voltar → 14.
 
 ### 23 Pendências da conta
-- **Ator:** todos veem; **resolver** é de qualquer um, exceto "não informou" (só criador).
+- **Ator:** todos veem; **resolver** é do próprio participante (confirmar seu consumo) ou do **criador** (pendências de terceiros — com origem visível).
 - **Objetivo:** listar o que impede o fechamento.
 - **Conteúdo:** lista de pendências com atalho "Ir para a falta" · [Lembrar pessoas] (share/WhatsApp com texto pronto — sem push):
   ```text
   Ainda falta resolver:
-  ⚠ Batata frita não dividida        [Ir para a falta]
-  ⚠ 1 unidade de cerveja não distribuída
-  ⚠ Carlos não informou o consumo     [só o criador resolve]
+  ⚠ Batata frita não dividida                [Ir para a falta]
+  ⚠ 1 unidade de cerveja não distribuída     [Ir para a falta]
+  ⚠ Carlos não confirmou o consumo           [só o criador resolve]
+  ⏳ Ana aguardando confirmação               [só o criador resolve]
   [ Lembretes via WhatsApp ]
   ```
-- **Pendências reconhecidas:** lista estruturada `Pendencia[]` (`02`) — item não dividido · unidades sobrando · personalizada incompleta · "não informou" · divergência (>5¢) · cobrança não confirmada. Cada entrada tem `id`, `tipo`, `entidadeId` e atalho "Ir para a falta".
-- **Transições:** resolver item → loop 17–21 · resolver "não informou" → diálogo do criador: [Marcar R$ 0,00] [Dividir entre todos] [Personalizar] **[Desvincular consumos]** (escolha explícita, nunca automática) · zero pendências → 25.
-  - **[Desvincular consumos]:** itens/unidades que outras pessoas atribuíram a ele voltam a `NAO_DIVIDIDO`/incompleto; depois resolve-se cada item pelo caminho normal. Para placeholder que nunca entrou, é a opção padrão.
+- **Pendências reconhecidas:** lista estruturada `Pendencia[]` (`02`) — `ITEM_NAO_DIVIDIDO` · `UNIDADES_NAO_DISTRIBUIDAS` · `DIVISAO_INCOMPLETA` · `PARTICIPANTE_NAO_INFORMOU` · `PARTICIPANTE_NAO_CONFIRMOU` · `PARTICIPANTE_AGUARDANDO_ENTRADA` · `COBRANCA_NAO_CONFIRMADA` · `DIVERGENCIA_COMANDA`. Cada entrada tem `id`, `tipo`, `entidadeId` e atalho "Ir para a falta".
+- **Diálogo do criador** (escolha explícita, nunca automática — `05` §7.3):
+  - pendência **"não informou"**: [Marcar R$ 0,00] · [Personalizar] · [Desvincular consumos];
+  - pendência **"não confirmou"** (⚠ bloqueia, decisão 1 da 2ª rodada): **[Confirmar em nome dela]** (→ exibe "✓ Resolvido por Guilherme (em nome de Ana)") · [Dividir entre todos] · [Personalizar] · [Desvincular consumos].
+  - **[Desvincular consumos] é etapa:** remove as atribuições e **mantém a pendência aberta**; o diálogo avança até a segunda escolha resolver de fato. Para placeholder que nunca entrou, é o caminho natural.
+- **Transições:** resolver item → loop 17–21 · zero pendências → 25.
 
 ### 24 Fechar minha parte
 - **Ator:** qualquer participante (paralelo ao restante).
@@ -317,8 +330,8 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
   Se a comanda mudar, você será avisado para conferir novamente.
   [ Voltar para a conta ]
   ```
-- **Semântica:** fechar marca a parte como **conferida** (a pessoa revisou o próprio total) — não é congelamento absoluto da conta.
-- **Pós:** se item que ela consumiu for alterado → **reabre com aviso** "Sua parte foi alterada — confirme novamente" (volta a ATIVO).
+- **Semântica:** fechar marca a parte como **conferida com o estado atual da divisão** (a pessoa revisou o próprio total) — a conta pode mudar até finalizar; não é congelamento absoluto.
+- **Pós:** se item que ela consumiu for alterado → **reabre com aviso** "Sua parte foi alterada — confirme novamente" (volta a ATIVO). Copy pós-fechamento: "Conferida — pode mudar até a conta finalizar; avisaremos se mudar."
 - **Transições:** confirmar → estado PARTE_CONFERIDA (fica na tela) · Voltar → 14.
 
 ---
@@ -374,6 +387,7 @@ Navegação principal (físicas): 01 → 02 → 06 → 10 → 11 → 13 ⇄ 14 �
 | 🟢 Sincronizado | normal |
 | 🟡 Sincronizando… | operação em voo (o card alterado fica "pendente" até ack) |
 | 🔴 Você está offline | sem conexão: leitura do último estado; operações críticas bloqueadas com "Tentar novamente"; nada é exibido como salvo antes do servidor |
+| **Banner leve** | eventos importantes ("sua parte foi alterada", conta finalizada): banner persistente **até acknowledge**; com **debounce** para eventos repetidos — **não** é toast sequencial (Gemini 2.2 · `08 §3`) |
 
 ### Barra fixa "Minha parte" (elemento global na conta)
 
@@ -381,10 +395,12 @@ Presente **sempre** nas telas da conta ativa (13, 14, 15, 16, 23, 24 — não em
 
 ```text
 ──────────────────────────────
-Minha parte         R$ 64,90 ✓
+Minha parte até agora   R$ 64,90 ⏳     ← enquanto houver pendências na conta
+Minha parte             R$ 64,90 ✓      ← conta sem pendências
 ```
 
 - Valor recalcula em tempo real; **toque abre a tela 22**.
+- **Rótulo:** "Minha parte **até agora**" enquanto houver pendências (a divisão pode mudar); sem pendências, "Minha parte".
 - Sufixo de estado: `✓` confirmado · `⏳` aguardando confirmação · `⚠` não informou (mesma semântica da tela 15).
 - Atende ao princípio "o usuário deve perceber imediatamente quanto está pagando" — não é só uma tela.
 

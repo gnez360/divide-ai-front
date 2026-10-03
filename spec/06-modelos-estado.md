@@ -33,11 +33,13 @@ FINALIZADA          (permanente no MVP — sem transição de saída)
 | OCR_PROCESSANDO → OCR_ERRO | falha, formato inválido, timeout | — |
 | OCR_ERRO → OCR_PROCESSANDO | "Tentar de novo" | — |
 | OCR_ERRO → AGUARDANDO_CONFERENCIA | "Digitar manualmente" | tela 06 vazia |
-| AGUARDANDO_CONFERENCIA → AGUARDANDO_PARTICIPANTES | "Confirmar e convidar" (10) | `|Σ − total impresso| ≤ 5¢` |
-| AGUARDANDO_CONFERENCIA → DIVISAO_EM_ANDAMENTO | (possível: editar itens já na sala) | — |
-| qualquer → DIVISAO_EM_ANDAMENTO | primeira divisão confirmada | — |
-| DIVISAO_EM_ANDAMENTO → FINALIZADA | "Fechar conta" (25) | **zero pendências** |
+| AGUARDANDO_CONFERENCIA → AGUARDANDO_PARTICIPANTES | "Confirmar comanda" (tela 06) / "Confirmar e convidar" (tela 10) | `|Σ − total impresso| ≤ 5¢` (ou ajuste de comanda aplicado — 07 §3.1) |
+| AGUARDANDO_PARTICIPANTES → DIVISAO_EM_ANDAMENTO | primeira divisão confirmada | — |
+| DIVISAO_EM_ANDAMENTO → DIVISAO_EM_ANDAMENTO | edições/nav (sem mudança de estado) | — |
+| DIVISAO_EM_ANDAMENTO → FINALIZADA | "Fechar conta" (25) | **zero pendências** + CAS (`08 §4.3`) |
 | ↔ estados de sync | ver `08-tempo-real-concorr.md` | offline não transiciona no servidor |
+
+Não existe volta a `AGUARDANDO_CONFERENCIA` depois de `AGUARDANDO_PARTICIPANTES` (edição de comanda na sala fica em `AGUARDANDO_PARTICIPANTES`/`DIVISAO_EM_ANDAMENTO`; divergência nova vira pendência `DIVERGENCIA_COMANDA`, não reabre o estado — 07 §3).
 
 **Estado ≠ sincronização:** 🟢/🟡/🔴 são dimensões separadas (qualquer estado pode estar offline).
 
@@ -57,7 +59,7 @@ EM_DIVISAO ⇄ DIVISAO_INCOMPLETA
 | Estado | Definição operacional |
 |---|---|
 | `NAO_DIVIDIDO` | Nenhuma atribuição confirmada. |
-| `EM_DIVISAO` | Tela de divisão aberta por alguém (estado efêmero, **não bloqueia** os outros — sem lock; ver `08`). Visível como "editando…" opcional. |
+| `EM_DIVISAO` | Tela de divisão aberta por alguém. **Efêmero: não é persistido** — servido apenas como presença `editoresAtivos[]` na UI (6.2); **não bloqueia** os outros — sem lock (ver `08`). Visível como "editando…" opcional. |
 | `DIVISAO_INCOMPLETA` | Divisão confirmada mas **não fecha**: unidades `n/n` incompletas OU soma de personalização ≠ valor do item. Gera pendência. |
 | `DIVIDIDO` | Divisão confirmada e fecha (Σ atribuições = valor do item; unidades todas distribuídas). |
 
@@ -65,7 +67,8 @@ Transições:
 
 - `DIVIDIDO → EM_DIVISAO`: usuário toca em "Editar novamente" (17).
 - `DIVIDIDO → DIVISAO_INCOMPLETA`: edição da comanda cria excedente (ex.: 4→5 cervejas: fica `4/5`) — **nunca destrói** a divisão (`05` §6.1).
-- `DIVIDIDO → NAO_DIVIDIDO`: troca de modo (com confirmação) **ou** exclusão do item.
+- `DIVIDIDO → NAO_DIVIDIDO`: troca de modo (com confirmação, atômica — `05` §6.2).
+- **Exclusão do item**: o item sai da lista como **tombstone broadcast** ("A cerveja foi excluída por João" com [Desfazer] enquanto a conta não finalizar) — nunca some silenciosamente das telas dos outros; partes afetadas reabrem (`05` §6.3).
 - Item **personalizado** com soma ≠ valor nunca sai de `DIVISAO_INCOMPLETA` (validação impede confirmar).
 
 ---
@@ -86,12 +89,12 @@ CONVIDADO ──entrou (link/token)──▶ ATIVO ⇄ PARTE_CONFERIDA
 |---|---|
 | `CONVIDADO` | Pré-cadastrado (vaga), nunca acessou. Sinalizado "Aguardando entrada". Pode já ter atribuições. |
 | `ATIVO` | Entrou (tem `dispositivoToken`). Pode editar, dividir, ver tudo. |
-| `PARTE_CONFERIDA` | Marcou a própria parte como conferida ("Fechar minha parte"). Vê tudo, não edita a própria parte (reabre com aviso se afetada). |
+| `PARTE_CONFERIDA` | Marcou a própria parte como conferida ("Fechar minha parte"). Vê tudo e **pode continuar editando**; qualquer mutação que afete a própria parte reabre com aviso obrigatório (`05` §6.3) — 3.15. |
 
 **Flags (não estados):**
 
 - `presença`: online/offline/conectado recentemente (`05` §5).
-- `consumoConfirmado`: booleano → o próprio participante confirmou/revisou seu consumo. `false` + nada atribuído = `NAO_INFORMOU` (pendência); `false` + valor atribuído = "⏳ Aguardando confirmação"; confirmou com R$ 0,00 = `SEM_CONSUMO`. Detalhe em `05` §7.
+- `consumoConfirmado`: booleano → o próprio participante confirmou/revisou seu consumo. `false` + nada atribuído = `NAO_INFORMOU` (pendência); `false` + valor atribuído = `AGUARDANDO_CONFIRMACAO` (**pendência — bloqueia fechamento**, decisão 1 da 2ª rodada); confirmou com R$ 0,00 = `SEM_CONSUMO`. **Qualquer mudança de atribuição zera o flag** (`05` §7.2). `origemConfirmacao`: `PROPRIO_PARTICIPANTE` | `RESOLUCAO_CRIADOR` (exibição "Resolvido por X"). Detalhe em `05` §7.
 - `estadoPagamento`: `ABERTO` no MVP; `PAGO` **pós-MVP** (sem UI agora).
 
 **Transições especiais:**
@@ -116,6 +119,7 @@ CONVIDADO ──entrou (link/token)──▶ ATIVO ⇄ PARTE_CONFERIDA
 | OCR falha | `OCR_ERRO` | — | — |
 | Primeira divisão | → `DIVISAO_EM_ANDAMENTO` | `NAO_DIVIDIDO→DIVIDIDO` | — |
 | Editar item dividido | mantém | `→ DIVISAO_INCOMPLETA` | partes afetadas → `ATIVO` + aviso |
+| Atribuição alterada | mantém | mantém | `consumoConfirmado → false`; parte conferida reabre |
 | Alguém fechar parte | mantém | — | `ATIVO→PARTE_CONFERIDA` |
 | Pendência criada | mantém | `→ DIVISAO_INCOMPLETA` | `NAO_INFORMOU` flag |
 | "Fechar conta" | → `FINALIZADA` | freeze | freeze |

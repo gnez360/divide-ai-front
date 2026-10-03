@@ -6,18 +6,18 @@
 |---|---|
 | **Conta** | Sessão colaborativa de uma divisão de mesa. O que a spec chama de "sessão". Identificada por ID compartilhável. |
 | **Comanda** | A conta do restaurante: itens, quantidades, preços, taxas, descontos e total impresso. Camada "o que foi cobrado". |
-| **Item** | Linha da comanda (nome, quantidade, preço unitário/total). Pode ser dividido de 3 formas. |
+| **Item** | Linha da comanda (nome, quantidade, preço). O **total da linha** ou o **unitário** é a autoridade (ver `07 §1`). Pode ser dividido de 3 formas. |
 | **Taxa / Adicional** | Cobrança sobre o consumo (serviço, couvert, gorjeta...). Nunca presumida: vem da comanda ou é adicionada pelo usuário. |
 | **Desconto** | Dedução sobre o consumo. Participa do cálculo final. |
 | **Divisão** | Como o item foi atribuído aos participantes. Modos: entre pessoas, unidades, personalizada. |
 | **Consumo** | Camada do domínio: quem deve cada item, já com taxas/descontos rateados. |
 | **Parte** | O total individual de um participante (consumo + taxas - descontos rateados). |
-| **Fechar minha parte** | Ação individual que marca a parte como **conferida** pela pessoa (ela pode ir embora). Se a comanda mudar, a parte reabre com aviso. Não fecha a conta. |
+| **Fechar minha parte** | Ação individual que marca a parte como **conferida com o estado atual** da divisão (ela pode ir embora). Pode mudar até a conta finalizar; se a comanda mudar, a parte reabre com aviso. Não fecha a conta. Enquanto houver pendências, a barra global lê "Minha parte **até agora**". |
 | **Fechar conta** | Ação final que bloqueia toda a divisão (estado FINALIZADA). |
 | **Participante** | Pessoa na conta. Pode ter sido pré-cadastrado (vaga) ou ter entrado pelo link. |
 | **Vaga** | Limite de 6 = entrados + pré-cadastros. |
 | **Placeholder** | Participante pré-cadastrado que ainda não entrou (estado "aguardando entrada"). |
-| **Pendência** | Algo que impede o fechamento (item não dividido, unidade sobrando, "não informou", divergência). |
+| **Pendência** | Algo que impede o fechamento (item não dividido, unidade sobrando, "não informou", "não confirmou", aguardando entrada, cobrança não confirmada, divergência). Tipos em `§2`. |
 | **Pagamento** | Camada do domínio (quem paga o quê). **Fora do MVP na interface.** |
 
 ---
@@ -30,39 +30,54 @@ Conta
 ├── nomeRestaurante?: string
 ├── mesa?: string
 ├── numeroComanda?: string
-├── imagemComanda?: blob/URL
+├── imagemComanda?: blob/URL     (purgada 48h após FINALIZADA; ver 10-D1)
 ├── estado: ver 06-modelos-estado.md
-├── versao: number (concorrência da conta)
+├── versao: number (concorrência por entidade)
+├── revisao: int64 (ordenação de eventos + snapshot + CAS de fechamento; ver 08)
 ├── criadoPor: participanteId
 ├── criadoEm, atualizadoEm: datetime
 ├── itens: Item[]
-├── cobrancas: Cobranca[]           (taxas e descontos)
+├── cobrancas: Cobranca[]           (taxas, descontos e ajustes)
 ├── totalInformado: centavos        (total impresso na comanda)
-├── ajusteArredondamento: centavos  (residual ≤ 5¢ absorvido; 0 quando não há divergência)
+├── ajusteConciliacao: centavos     (= totalInformado − totalCalculado; |.| ≤ 5¢;
+│                                    0 quando confere; nunca negativo em módulo; ver 07 §3)
 ├── participantes: Participante[]
 ├── pendencias: Pendencia[]          (derivada; calculada/servida pelo servidor)
-└── totalDistribuido: derivado (Σ itens) — nunca armazenado como autoridade
+│
+│   Derivados (calculados/servidos; nunca autoridade de escrita):
+├── subtotalItens: derivado (Σ itens)
+├── valorItensNaoAtribuidos: derivado (itens NAO_DIVIDIDO + DIVISAO_INCOMPLETA + unidades do pool)
+├── saldoNaoDistribuido: derivado (valorItensNaoAtribuidos + cobranças sem rateio válido;
+│                                   deve ser 0 para fechar)
+├── totalCalculado: derivado (Σ itens + Σ taxas − Σ descontos + ajusteConciliacao)
+└── totalDistribuido: DEPRECADO → usar totalCalculado (nome antigo mantido só em textos antigos)
 ```
 
 ```text
 Pendencia                        (lista estruturada; o frontend não infere do estado)
 ├── id: string
 ├── tipo: ITEM_NAO_DIVIDIDO | UNIDADES_NAO_DISTRIBUIDAS | DIVISAO_INCOMPLETA
-│       | PARTICIPANTE_NAO_INFORMOU | COBRANCA_NAO_CONFIRMADA | DIVERGENCIA_COMANDA
+│       | PARTICIPANTE_NAO_INFORMOU | PARTICIPANTE_NAO_CONFIRMOU
+│       | PARTICIPANTE_AGUARDANDO_ENTRADA
+│       | COBRANCA_NAO_CONFIRMADA | DIVERGENCIA_COMANDA
 ├── entidadeId: string           (item/cobranca/participante que originou)
 ├── participanteId?: string
 ├── severidade: BLOQUEIA_FECHAMENTO
 ├── resolvida: boolean
 ├── resolvidaEm?: datetime
-└── resolvidaPor?: participanteId
+└── resolvidaPor?: participanteId  (quando resolvido pelo criador em nome da pessoa)
 ```
 
 ```text
 Item
 ├── id, nome: string
 ├── quantidade: int (≥ 1)
-├── precoUnitario: centavos         (AUTORIDADE persistida)
-├── precoTotal: centavos            (derivado = qtd × unitário; nunca editável isoladamente)
+├── modoPreco: TOTAL_LINHA | UNITARIO
+│        (TOTAL_LINHA: valorTotal é autoridade — ex.: OCR "3 un · R$ 10,00" sem unitário exato;
+│         UNITARIO: precoUnitario é autoridade; ver 07 §1)
+├── valorTotal: centavos          (autoridade quando modoPreco = TOTAL_LINHA)
+├── precoUnitario?: centavos      (autoridade quando UNITARIO; derivado/informativo quando
+│                                  TOTAL_LINHA e divisível; null quando não divisível)
 ├── modoDivisao: ENTRE_PESSOAS | UNIDADES | PERSONALIZADO | NAO_DIVIDIDO
 ├── atribuicoes: Atribuicao[]
 ├── estado: ver 06-modelos-estado.md
@@ -78,16 +93,22 @@ Atribuicao                    (partilha de um item por participante)
 ```
 
 ```text
-Cobranca                      (taxa ou desconto)
+Cobranca                      (taxa, desconto ou ajuste de conciliação)
 ├── id, descricao: string
 ├── tipo: TAXA | DESCONTO
-├── valor: centavos
-├── percentual?: decimal        (quando informado na comanda)
+├── valor: centavos (≥ 0; o SINAL vem do tipo: TAXA soma, DESCONTO subtrai)
+├── percentualBp?: int          (basis points quando informado na comanda; 1000 = 10%)
 ├── baseCalculo?: centavos      (quando identificável)
+├── origemValor: IMPRESSO_FIXO | CALCULADO_DE_PERCENTUAL | MANUAL_FIXO  (auditável)
 ├── regraDistribuicao: PROPORCIONAL_CONSUMO | IGUAL_POR_PESSOA
 │                               (default do OCR: PROPORCIONAL_CONSUMO;
 │                                couvert/taxa "por pessoa" → IGUAL_POR_PESSOA)
-├── confirmada: boolean         (usuário conferiu)
+├── participantesElegiveis?: participanteId[]
+│                               (obrigatório quando IGUAL_POR_PESSOA; sem auto-inclusão:
+│                                quem já confirmou parte não é incluído em rateios futuros)
+├── quantidadeCobrada?: int     (= |elegíveis|; rateio = valor ÷ quantidadeCobrada, Maior Resto)
+├── confirmadaNaVersao?: int    (confirmada ⇔ confirmadaNaVersao == versao; edição zera)
+├── confirmadaPor?: participanteId
 └── versao: number
 ```
 
@@ -101,7 +122,10 @@ Participante
 ├── dispositivoToken?: string   (identidade de re-entrada)
 ├── consumoConfirmado: boolean  (o PRÓPRIO participante confirmou/revisou seu consumo;
 │                                atribuição feita por terceiros NÃO conta;
-│                                !consumoConfirmado = NAO_INFORMOU)
+│                                QUALQUER mudança de atribuição zera este flag — ver 05 §7)
+├── origemConfirmacao?: PROPRIO_PARTICIPANTE | RESOLUCAO_CRIADOR
+│                                (quando RESOLUCAO_CRIADOR: UI exibe "Resolvido por X";
+│                                setado pelo override do criador — ver 05 §7)
 ├── entrouEm?: datetime
 └── versao: number
 ```

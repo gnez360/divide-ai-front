@@ -8,10 +8,13 @@ Toda a matemática financeira da spec. Princípio: **precisão decimal em centav
 
 - Armazenamento: **centavos (inteiro)**. Cálculos intermediários em inteiro (unidade: 1/100 do centavo quando necessário para taxas percentuais) ou decimal exato — **nunca IEEE-754 float/double**.
 - Exibição: BRL (`R$ 1.234,56`).
-- Validações de item:
-  - `precoUnitario` é a **autoridade persistida**; `precoTotal = quantidade × precoUnitario` é sempre **derivado** (nunca editável isoladamente). Editar quantidade: unitário permanece, total recalcula (4 × 9,00 → qtd 5 → 45,00).
-  - `quantidade ≥ 1`, `preco ≥ 0`.
-  - Se a soma dos totais derivados não bater com o subtotal impresso da comanda → **divergência** (§3), não ajuste silencioso de preço.
+- Validações de item — **autoridade do preço** (P0-13, decisão 2 da 2ª rodada):
+  - `modoPreco = UNITARIO`: `precoUnitario` é autoridade; `valorTotal = quantidade × precoUnitario` é **derivado**. Editar quantidade: unitário permanece, total recalcula (4 × 9,00 → qtd 5 → 45,00).
+  - `modoPreco = TOTAL_LINHA`: `valorTotal` é autoridade (é o que a comanda imprime). `precoUnitario` existe só quando `valorTotal ÷ quantidade` é exato — exibido como **informativo**; quando não divisível, `precoUnitario = null` e a linha é válida (ex.: `3 un · R$ 10,00`). Editar quantidade em TOTAL_LINHA **mantém** `valorTotal` (sem unitário exato, a tela avisa "sem preço unitário exato — confira o total").
+  - OCR: usa `UNITARIO` quando a linha traz `qtd × unit = total` consistente; caso contrário `TOTAL_LINHA`. Fallback manual → `UNITARIO` (total impresso digitado separadamente na tela 05).
+  - Edição: o campo **editável** é sempre a autoridade do modo (tela 07). Nunca edita-se um derivado isoladamente.
+  - `quantidade ≥ 1`, `valor ≥ 0`.
+  - Se a soma dos totais não bater com o subtotal impresso da comanda → **divergência** (§3), não ajuste silencioso de preço.
 
 ---
 
@@ -31,14 +34,14 @@ Toda a matemática financeira da spec. Princípio: **precisão decimal em centav
 
 ### 2.3 Representação
 
-Cada cobrança: `tipo (TAXA|DESCONTO)`, `descricao`, `valor`, `percentual?`, `baseCalculo?`, `regraDistribuicao`, `confirmada`.
+Cada cobrança: `tipo (TAXA|DESCONTO)`, `descricao`, `valor (≥ 0; sinal vem do tipo)`, `percentualBp?`, `baseCalculo?`, `origemValor (IMPRESSO_FIXO | CALCULADO_DE_PERCENTUAL | MANUAL_FIXO)`, `regraDistribuicao`, `participantesElegiveis?`, `quantidadeCobrada?`, `confirmadaNaVersao?` (`confirmada ⇔ confirmadaNaVersao == versao`).
 
 ### 2.4 Distribuição (por `regraDistribuicao` da cobrança)
 
 | Regra | Comportamento |
 |---|---|
 | `PROPORCIONAL_CONSUMO` (default do OCR) | Distribui **proporcionalmente ao consumo (itens)** de cada participante. |
-| `IGUAL_POR_PESSOA` | Divide o valor pelo **número de participantes da conta** (1/n cada). Recalcula quando a contagem muda (entrada de participante). Ex.: couvert R$ 90,00 com 6 participantes → R$ 15,00 cada, independentemente do consumo. |
+| `IGUAL_POR_PESSOA` | Divide o valor entre **`participantesElegiveis[]`** → `parte = valor ÷ quantidadeCobrada`, Maior Resto (§6). Sem auto-inclusão: quem já tinha `consumoConfirmado` quando a cobrança nasceu não entra; quem entrar depois não é incluído retroativamente — mudar o conjunto é **edição da cobrança** (reabre `confirmadaNaVersao`), não efeito silencioso. Ex.: couvert R$ 90,00 ÷ 6 elegíveis → R$ 15,00 cada. |
 
 - **Validação:** Σ das partes individuais da cobrança = `valor` da cobrança (tolerância 0; centavos de sobra pelo Maior Resto, §6).
 - A distribuição é sempre **transparente**: a UI mostra a taxa na tela individual ("Serviço 10% — R$ 5,90") e na tela 08 (regra + "distribuída proporcionalmente ao consumo" / "R$ 15,00 × 6 pessoas").
@@ -49,16 +52,28 @@ Cada cobrança: `tipo (TAXA|DESCONTO)`, `descricao`, `valor`, `percentual?`, `ba
 
 ```text
 Σ calculado = Σ itens + Σ taxas − Σ descontos
-diferença   = |Σ calculado − total impresso|
+diferença   = total impresso − Σ calculado   (com sinal)
 ```
 
 | Diferença | Ação |
 |---|---|
-| **≤ R$ 0,05** (5 centavos) | **Absorvida automaticamente** no campo `ajusteArredondamento` da **conta** (resquício de arredondamento, sinal + centavos). Sem tela, sem pendência. |
-| **> R$ 0,05** | **Bloqueia**: tela 09 com `total impresso` como META. Só existe [Corrigir] → ajustar itens/cobranças. **Sem "Confirmar assim mesmo"** (decisão). |
+| **≤ R$ 0,05** (5 centavos) | **Absorvida automaticamente** no campo `ajusteConciliacao` da **conta** (= `totalInformado − totalCalculado`; residual ≤ 5¢ com sinal). Sem tela, sem pendência. |
+| **> R$ 0,05** | **Bloqueia**: tela 09 com `total impresso` como META. Existe [Corrigir] → ajustar itens/cobranças **e** [Ajuste de comanda] (abaixo). **Sem "Confirmar assim mesmo"** (decisão mantida). |
 
-- Enquanto a divergência > 5¢ existir: conta **não pode** sair de `AGUARDANDO_CONFERENCIA` e gera **pendência** de fechamento.
-- **Absorção de ≤5¢ → `conta.ajusteArredondamento`** (entidade, nível de conta): residual com sinal guardado na conta e aplicado **no rateio das partes pelo Maior Resto** (§6). **Nunca** é injetado em item ou taxa — itens e cobranças permanecem fiéis aos valores impressos da comanda (a tela 08/09 continua mostrando R$ 21,00, não R$ 21,03). Registrar em log de auditoria.
+- Enquanto a divergência > 5¢ existir: conta **não pode** sair de `AGUARDANDO_CONFERENCIA` e gera **pendência** (`DIVERGENCIA_COMANDA`) de fechamento.
+- **Absorção de ≤5¢ → `conta.ajusteConciliacao`** (entidade, nível de conta): residual com sinal guardado na conta e aplicado **no rateio das partes pelo Maior Resto** (§6). **Nunca** é injetado em item ou taxa — itens e cobranças permanecem fiéis aos valores impressos da comanda (a tela 08/09 continua mostrando R$ 21,00, não R$ 21,03). Registrar em log de auditoria.
+
+### 3.1 [Ajuste de comanda] (decisão 4 da 2ª rodada)
+
+Quando a diferença > 5¢, além de [Corrigir], a tela 09 oferece **[Ajuste de comanda]**: o criador aceita a diferença como cobrança **explícita** e rastreável — nunca altera itens nem taxas impressos.
+
+- Cria uma `Cobranca { descricao: "Ajuste de divergência", origemValor: MANUAL_FIXO, confirmada }`:
+  - diferença **positiva** (faltam R$ 10,00 para bater com o impresso) → `tipo: TAXA` +1000¢;
+  - diferença **negativa** (sobra) → `tipo: DESCONTO` −1000¢ (módulo).
+- Rateio: mesma regra da cobrança (default `PROPORCIONAL_CONSUMO`).
+- `confirmada = true` na criação (foi criada de forma explícita pelo usuário).
+- Depois de criada: `totalCalculado` passa a bater com o impresso, `ajusteConciliacao = 0`, pendência `DIVERGENCIA_COMANDA` se resolve.
+- O resumo (telas 25/26) e o detalhe (16/22) exibem a linha discreta **"Ajuste de conciliação ±R$ X,XX"** quando `ajusteConciliacao ≠ 0` ou a cobrança de ajuste existe. Itens e taxas originais permanecem intactos (aceite A3).
 
 ---
 
@@ -73,8 +88,9 @@ Validação comum: **Σ de um item = valor do item** (tolerância **0** para per
 
 ### 4.2 Distribuir unidades (UNIDADES)
 
-- Σ unidades distribuídas = `quantidade` do item. **Nunca >** (UI impede `5 de 4`) e confirmar só em `n/n`.
-- `partilha_i = unidades_i × precoUnitario`.
+- Σ unidades distribuídas = `quantidade` do item. **Nunca >** (UI impede `5 de 4`) e confirmar salva só em `n/n` (P0-14).
+- `modoPreco = UNITARIO`: `partilha_i = unidades_i × precoUnitario`.
+- `modoPreco = TOTAL_LINHA` **indivisível** (ex.: 3 un · R$ 10,00): a partilha de cada um é o **Maior Resto sobre `valorTotal` entre `quantidade` unidades** (§6) — Σ partes = valorTotal, sempre; nada de "impossível dividir".
 - Quantidade ≥ 1 **não** implica modo unidades (independência conceitual, braindump §26).
 
 ### 4.3 Personalizar (VALOR_FIXO / PERCENTUAL)
@@ -109,7 +125,8 @@ Dataset: Maria → 59,00 + 5,90 − 0 = **64,90** ✓
 | Pessoas com consumo 0 | recebem R$ 0,00 de taxa/desconto (nada de "cota mínima") |
 | **Desconto tornaria o total negativo** | **validação global antes de salvar a cobrança**: `Σ itens + Σ taxas − Σ descontos ≥ 0`. Se violar → **bloqueio** com "Desconto maior que o valor da comanda" (ajuste os valores na tela 08). Não existe parte "forçada a 0" no rateio. |
 | Parte < R$ 0,00 por arredondamento (≤1¢) | guarda de arredondamento: piso em R$ 0,00 com redistribuição do residual pelo Maior Resto (§6). |
-| Participante `NAO_INFORMOU` | ainda não tem parte fechada — entra no rateio apenas quando confirmar (ou quando o criador resolver a pendência) |
+| **Qualquer parte individual < R$ 0,00** (causa que for: taxas, descontos, ajuste) | **validação global antes do commit** (P0-03): a operação é **rejeitada (422)** com "O desconto/ajuste deixa a parte de X negativa — ajuste os valores". Nunca existe parte negativa no estado servido; nenhum commit que a produza é aplicado. |
+| Participante `NAO_INFORMOU` ou `AGUARDANDO_CONFIRMACAO` | ainda não tem parte fechada — entra/valida no rateio pelo consumo atribuído, mas o fechamento **bloqueia** até confirmar (ou o criador resolver — 05 §7) |
 
 ---
 
@@ -129,16 +146,29 @@ Aplicado em: divisão entre pessoas, rateio de cada taxa/desconto, conversão de
 
 ---
 
-## 7. Garantia financeira (invariante)
+## 7. Garantia financeira (invariantes)
+
+Duas invariantes, com regras distintas (P0-01):
 
 ```text
-Σ (parte de todos os participantes) = total da conta (total impresso, quando divergência ≤ 5¢)
+1. Enquanto a conta está ABERTA (qualquer estado de divisão):
+   Σ (partes provisórias) + saldoNaoDistribuido + 0 = totalCalculado
+   (o "furo" legítimo — itens não atribuídos, unidades do pool, cobranças sem rateio —
+    vive em saldoNaoDistribuido e É VISÍVEL na UI; nunca é escondido nem forçado a 0)
+
+2. No FECHAMENTO da conta (FINALIZADA):
+   saldoNaoDistribuido = 0  ∧  Σ (partes) = totalInformado (± tolerância já absorvida)
 ```
 
+- `totalCalculado = Σ itens + Σ taxas − Σ descontos + ajusteConciliacao` (derivado).
 - **Servidor é a autoridade**: recalcula sempre; cliente só exibe.
 - Nunca pode existir R$ 99,99 ou R$ 100,01 contra R$ 100,00.
-- Verificação em todo `commit` de divisão/edição no servidor: se Σ ≠ total → **rejeita a operação** (500/409), loga, reenvia estado correto.
-- Testes obrigatórios: divisão por 3/7/6 com centavos "quebrados", desconto negativo, taxa sobre 210 com 6 pessoas (dataset).
+- Verificação em todo `commit` de divisão/edição no servidor (transação única — ver `08`):
+  - violação da **invariante 1** = **bug interno** → **500**, loga, não aplica, reenvia estado correto;
+  - estado "com furo" é **esperado** (não é erro) e vira pendência, nunca rejeição silenciosa;
+  - violação da **invariante 2** (tentativa de fechar com saldo ≠ 0) → **409/422** com `serverState` (08 §4).
+  - Nenhuma parte individual < 0 → **422** (§5.1).
+- Testes obrigatórios: divisão por 3/6 (conta) e 3/7/6 como **teste unitário da biblioteca de Maior Resto**, desconto negativo, taxa sobre 210 com 6 pessoas (dataset), furo visível de 50,00 (não atribuído) mantendo invariante 1.
 
 ---
 
@@ -150,7 +180,9 @@ Aplicado em: divisão entre pessoas, rateio de cada taxa/desconto, conversão de
   - unidades não distribuídas;
   - personalização incompleta;
   - divergência > 5¢;
-  - cobrança `confirmada = false`;
-  - participante `NAO_INFORMOU`.
+  - cobrança `confirmada = false` (editada após confirmação);
+  - participante `NAO_INFORMOU` (nada atribuído);
+  - participante `AGUARDANDO_CONFIRMACAO` (atribuído, não confirmou — bloqueia, decisão 1 da 2ª rodada);
+  - `CONVIDADO` com atribuição (`AGUARDANDO_ENTRADA`).
 
-Nenhuma delas é resolvida automaticamente (princípio 8); "não informou" é resolvido só pelo criador com escolha explícita.
+Nenhuma delas é resolvida automaticamente (princípio 8); "não informou"/"não confirmou" são resolvidos pelo próprio participante ou pelo criador com escolha explícita (05 §7).

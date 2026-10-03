@@ -50,7 +50,7 @@ Fluxo em **grafo** (não linha reta): há loops, condicionais e caminhos paralel
 
 | Passo | Tela | Condicional |
 |---|---|---|
-| 1 | 01 Home → "Nova conta" | — |
+| 1 | 01 Home → "Nova conta" → mini-step **nome/avatar do criador** (criador criado antes da comanda — `10` D15) | — |
 | 2 | 02 Capturar (foto ou galeria) | — |
 | 3 | 03 Prévia → "Usar esta foto" | "Tirar novamente" volta ao passo 2 |
 | 4 | 04 Processando OCR | **falha → 05 Fallback manual**; sucesso → 06 |
@@ -82,8 +82,9 @@ Fluxo em **grafo** (não linha reta): há loops, condicionais e caminhos paralel
                     entra no loop de divisão
 ```
 
-- Pré-cadastros (placeholders) já existem em 13 antes de a pessoa entrar: ao entrar com nome igual à vaga (ou via link de convite dedicado), **vincula à vaga** em vez de criar novo.
+- Pré-cadastros (placeholders) já existem em 13 antes de a pessoa entrar: ao entrar com nome igual à vaga (D6: **nome + token de dispositivo**) ou via tokenConvite do link, **vincula à vaga** em vez de criar novo.
 - Atribuir item a placeholder é permitido (sinalizado); ao entrar, a pessoa vê o que foi marcado nela e pode remover (ver `05-regras-dominio.md`).
+- **Conta finalizada** → o link abre o resumo somente leitura (26/27), sem modo de edição (tela 12 · 3.20).
 
 ---
 
@@ -101,8 +102,8 @@ Fluxo em **grafo** (não linha reta): há loops, condicionais e caminhos paralel
 
 Condições:
 
-- Unidades: botão confirmar só habilita em `n de n` (nunca 5 de 4).
-- Personalizar: confirmar só com soma = valor do item (tolerância 0).
+- Unidades: botão confirmar só habilita em `n de n` (nunca 5 de 4) e **só [Confirmar] persiste** — o stepper é local, sem gravação por toque (P0-14).
+- Personalizar: confirmar só com soma = valor do item (tolerância 0); **[Salvar parcial]** grava incompleto com pendência visível (tela 20 · D13).
 - Item de placeholder aparece sinalizado "aguardando entrada".
 
 ---
@@ -130,9 +131,10 @@ A conta dos demais continua aberta. Quem está com parte fechada **não é bloqu
 
 ```text
 [23 Pendências] ── houve pendência ──▶ resolver (volta ao loop de divisão)
-       │                               pendência "não informou" → só o CRIADOR
-       │                               resolve explicitamente (R$0 / dividir todos / personalizar)
-       ▼ zero pendências
+       │                               "não informou"/"não confirmou"/aguardando entrada
+       │                               → só o CRIADOR resolve explicitamente,
+       │                                 com origem visível ("Resolvido por X")
+       ▼ zero pendências (CAS no servidor — 08 §4.3)
 [25 Revisão final] ─▶ "Fechar conta" ─▶ confirmação ─▶ [26 FINALIZADA] ─▶ [27 Resumo]
 ```
 
