@@ -2,11 +2,13 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | 1.0 |
-| Data | 09/10/2026 |
+| Versão | 2.0 |
+| Data | 22/10/2026 |
 | Base | `spec.md` v2.0 (especificação funcional) |
 | Status | Pronta para implementação. Decisões em aberto em §19 |
-| Stack (decisão do produto) | Backend Node.js + Express + TypeScript · PostgreSQL no Supabase · Front PWA React + TypeScript + Tailwind CSS · nuvem pública genérica · OCR por adapter, começando pelo Google Cloud Vision |
+| Stack (decisão do produto) | Backend Node.js + Express + TypeScript · PostgreSQL e Storage no Supabase · Front PWA React + TypeScript + Tailwind CSS · plataforma Vercel (estáticos e API) · OCR por adapter, começando pelo Google Cloud Vision |
+
+**Histórico.** v2.0 (22/10/2026): plataforma fechada em Vercel + Supabase (ADR-14); worker e pg-boss removidos — OCR em background na própria invocação e jobs em `/api/cron/*` (§14); upload de foto por URL assinada (§10.1); cabeçalhos de segurança no `vercel.json` e no Express (ADR-12). v1.0 (09/10/2026): primeira versão, com contêineres e pg-boss.
 
 **Como ler:** `§F5.8` aponta para a seção 5.8 da spec funcional (`spec.md`); `§7.3` aponta para esta spec técnica. Critérios de aceite são citados como na spec funcional (`CA-D8`). Em caso de conflito, a spec funcional define o comportamento e esta spec define como implementá-lo; um conflito real deve ser corrigido nos dois documentos.
 
@@ -22,13 +24,14 @@
 | ADR-04 | Um único endpoint de comandos por conta (`POST /api/bills/:id/commands`) com união discriminada validada por zod | Idempotência, guardas de versão, aviso de reabertura e auditoria uniformes | §6 |
 | ADR-05 | Cada evento de tempo real carrega o snapshot completo da conta | Elimina diffs e reconstrução no cliente; um salto de revisão deixa de exigir busca extra | §8 |
 | ADR-06 | Fan-out entre instâncias com `LISTEN/NOTIFY` do Postgres e tabela de eventos de vida curta | Sem Redis nem broker; `NOTIFY` só é entregue após o commit (§F10.2 T7) | §8.4 |
-| ADR-07 | Jobs e tarefas agendadas com pg-boss no mesmo Postgres | OCR assíncrono, purgas e expirações sem outro serviço | §14 |
+| ADR-07 | Sem fila nem worker residente: o OCR roda em background na própria invocação (`after`), e os demais jobs são endpoints `POST /api/cron/*` acionados por um agendador externo (cron-job.org) | A plataforma é serverless: não existe processo longo para consumir filas, e os jobs são pontuais e curtos | §14 |
 | ADR-08 | OCR atrás da porta `ReceiptExtractor`; primeira implementação: Google Cloud Vision (`DOCUMENT_TEXT_DETECTION`) + parser próprio de comandas pt-BR | Trocar de provedor sem tocar no domínio; Vision devolve texto com posição, e a interpretação da comanda é nossa | §9 |
 | ADR-09 | `joinToken` derivado por HMAC (`billId` + versão), sem armazenar o token | Pode ser reexibido a qualquer participante, rotacionado por versão e não vaza se o banco vazar | §11.1 |
 | ADR-10 | Um cookie de sessão por conta (`__Host-cj_<billId>`), com o hash do token guardado no servidor | Atende "sair e apagar" por conta sem derrubar as outras contas do aparelho | §11.2 |
 | ADR-11 | Imagem servida por proxy da API (sessão obrigatória), nunca por URL pública ou assinada exposta | Imagem presa à sessão da conta; sem origem de terceiros na CSP | §10 |
-| ADR-12 | Cabeçalhos de segurança aplicados na borda (CDN/proxy), não na aplicação | Um único ponto de configuração (§F9.4.9) | §12.6 |
+| ADR-12 | Cabeçalhos de segurança no `vercel.json` para o estático e no Express para `/api/*` | A Vercel não permite configurar cabeçalhos de resposta de função na borda; o CSP é o mesmo nos dois pontos (§F9.4.9) | §12.6 |
 | ADR-13 | Cálculo com `BigInt` interno e desempate SHA-256 síncrono (`@noble/hashes`) | Produtos chegam a 10^16 (acima de `Number.MAX_SAFE_INTEGER`); hash síncrono roda igual no navegador e no Node | §4.5 |
+| ADR-14 | Plataforma fechada: Vercel Hobby (estáticos + função Node, região `gru1`) e Supabase free (Postgres + Storage, São Paulo), com cron-job.org como agendador | Free tier sem contagem de horas nem spin-down, latência de São Paulo para API e banco, um único fornecedor para front e API | §16 |
 
 ---
 
@@ -47,7 +50,7 @@
 | Tentativa de OCR vigente; resultado tardio descartado | §F6.2 | tentativa no documento + checagem na aplicação do resultado |
 | Token do link no fragmento, troca por sessão via `POST` | §F5.2, §F10.2 T9 | página `/entrar` + `POST /api/join` |
 | Sessão por conta e participante, revogável, encerra o SSE | §F5.3.1, §F8.10 | tabela `sessions` + `NOTIFY session_revoked` |
-| Foto sem metadados, só para sessões da conta, purgada 48 h após finalizar | §F9.4.8, §F9.5 | sharp + proxy + job |
+| Foto sem metadados, só para sessões da conta, purgada 48 h após finalizar | §F9.4.8, §F9.5 | sharp + proxy + cron |
 | Metas: comando ≤ 1,5 s p95; evento ≤ 500 ms p95; OCR ≤ 8 s p95 | §F9.1 | mesma região para API, banco e storage |
 
 ### 1.2 Escala de referência do MVP
@@ -60,7 +63,7 @@
 | Tamanho do documento da conta | ≤ 80 KB (100 itens, 20 cobranças, 6 participantes) |
 | Fotos por dia | 2.000 (≈ 1 MB cada após compressão) |
 
-Esses números dimensionam pools, limites e testes de carga (§17.6). Não são metas de negócio.
+Esses números dimensionam pools, limites e testes de carga (§17.6). Não são metas de negócio. O perfil free da plataforma (ADR-14, §16) impõe limites de projeto adicionais: duração máxima de 300 s por invocação (corta streams SSE, §8.1) e corpo de requisição de 4,5 MB — por isso o upload da foto vai por URL assinada direto ao Storage (§10.1). Nenhum fluxo do MVP se aproxima desses tetos: o OCR tem orçamento de 18 s e os comandos, de 1,5 s.
 
 ### 1.3 Fora do escopo técnico do MVP
 
@@ -74,28 +77,32 @@ Multi-região, replay de eventos, fila de operações offline, analytics de terc
 
 ```text
                          ┌──────────────────────────────────────────────┐
-  Phone (PWA)            │  Edge: CDN + proxy (contajuntos.app)         │
-  React + TS + Tailwind ─┼─▶ /*        → static files (web)             │
-  Service Worker         │  /api/*     → API (no cache, streaming)      │
-  IndexedDB (cache)      │  security headers (ADR-12)                   │
-                         └───────────────┬──────────────────────────────┘
-                                         │
-                       ┌─────────────────▼─────────────────┐
-                       │ API (Node 24 + Express 5), ≥ 2    │
-                       │ - commands, snapshot, join        │
-                       │ - SSE (fan-out via LISTEN)        │
-                       │ - image upload and proxy          │
-                       └───────┬───────────────┬───────────┘
-                               │               │
-             ┌─────────────────▼───┐   ┌───────▼─────────────────┐
-             │ Supabase Postgres   │   │ Supabase Storage         │
-             │ schema app + pgboss │   │ private bucket receipts  │
-             └─────────▲───────────┘   └───────▲─────────────────┘
-                       │                       │
-                       │  ┌────────────────────┴───────┐      ┌─────────────────────────┐
-                       └──┤ Worker (Node 24), 1 to 2   ├─────▶│ Google Cloud Vision API │
-                          │ - OCR, purges, expirations │      └─────────────────────────┘
-                          └────────────────────────────┘
+   Phone (PWA)            │  Vercel (contajuntos.app, gru1)              │
+   React + TS + Tailwind ─┼─▶ /*        → static files (web)             │
+   Service Worker         │  /api/*     → Node function (streaming)     │
+   IndexedDB (cache)      │  security headers (ADR-12)                   │
+                          └───────────────┬──────────────────────────────┘
+                                          │
+                        ┌─────────────────▼─────────────────┐
+                        │ API (Node 24 + Express 5)         │
+                        │ - commands, snapshot, join        │
+                        │ - SSE (fan-out via LISTEN)        │
+                        │ - signed upload and image proxy   │
+                        │ - OCR in background (after)       │
+                        │ - cron endpoints /api/cron/*      │
+                        └───────┬───────────────┬───────────┘
+                                │               │
+              ┌─────────────────▼───┐   ┌───────▼─────────────────┐
+              │ Supabase Postgres   │   │ Supabase Storage         │
+              │ schema app          │   │ private bucket receipts  │
+              └─────────▲───────────┘   └───────▲─────────────────┘
+                        │                       │
+                        │                       │  PUT via signed URL (upload)
+              ┌─────────┴───────────────────────┴───────────┐
+              │ cron-job.org (free, 1/min) ──▶ /api/cron/*  │
+              └─────────────────────────────────────────────┘
+
+              Google Cloud Vision API ◀── ReceiptExtractor (after, mesma função)
 ```
 
 ### 2.2 Responsabilidades
@@ -103,12 +110,12 @@ Multi-região, replay de eventos, fila de operações offline, analytics de terc
 | Componente | Faz | Não faz |
 |---|---|---|
 | Web (PWA) | telas, prévia de cálculo com `@cj/core`, sincronização (§13.4), cache de leitura offline, câmera e compressão | decidir validade de operação; guardar tokens em JS |
-| Borda | servir estáticos, rotear `/api`, TLS, cabeçalhos de segurança, compressão de respostas não-SSE | lógica de aplicação |
-| API | autenticar sessão, autorizar, validar entrada, executar comandos de forma serializada, publicar eventos, servir SSE, processar e servir imagem | chamar o provedor de OCR; executar tarefas agendadas |
-| Worker | jobs do pg-boss: OCR, expirações, purgas, efeitos fora do banco | atender HTTP de clientes |
-| Postgres | estado da conta, sessões, idempotência, eventos, presença, auditoria, filas, rate limit | regras de negócio (ficam no `@cj/core`) |
-| Storage | fotos processadas | servir arquivos diretamente ao cliente |
+| Borda (Vercel) | servir estáticos, TLS, CDN, compressão e cabeçalhos de segurança das respostas estáticas (§12.6); encaminhar `/api/*` para a função sem cache | lógica de aplicação |
+| API | autenticar sessão, autorizar, validar entrada, executar comandos de forma serializada, publicar eventos, servir SSE, processar e servir imagem, executar o OCR em background após o 202 e expor os endpoints de cron (§14) | manter estado em memória entre requisições (exceto os registros de streams, §8.3) |
+| Postgres | estado da conta, sessões, idempotência, eventos, presença, auditoria, rate limit | regras de negócio (ficam no `@cj/core`) |
+| Storage | fotos processadas; recebe o upload direto do navegador por URL assinada (§10.1) | servir arquivos diretamente ao cliente |
 | Google Vision | texto + posição das palavras da foto | interpretar a comanda |
+| cron-job.org | disparar `POST /api/cron/*` no intervalo configurado (§14) | conhecer a aplicação além do segredo e da URL |
 
 ### 2.3 Fluxos principais
 
@@ -129,11 +136,12 @@ Postgres ──NOTIFY bill_events──▶ every API instance ──SSE──▶
 
 ```text
 PWA: identification → POST /api/bills → Set-Cookie (creator session), status DRAFT
-PWA: photo → compression → POST /api/bills/:id/image (multipart)
-API: validate, strip metadata, re-encode → Storage → command START_OCR (OCR_PROCESSING, attempt T1)
-API: enqueue job "ocr" (T1) and job "ocr-expire" (T1, +25 s) in the same transaction → 202
-Worker: download image → Vision → parser → schema validation → system command APPLY_OCR_RESULT(T1)
-        (ignored if T1 is no longer the current attempt)
+PWA: photo → compression → POST /api/bills/:id/image/upload-url → signed PUT URL (§10.1)
+PWA: PUT image directly to Supabase Storage (object never crosses the API)
+PWA → POST /api/bills/:id/image {operationId} ──▶ API: HEAD object, validate size/type (§10.2)
+API: command START_OCR (OCR_PROCESSING, attempt T1) in a transaction → 202 {attemptId}
+API: after() → download image → Vision → parser → schema validation → APPLY_OCR_RESULT(T1)
+        (ignored if T1 is no longer the current attempt; expires at 25 s)
 PWA: receives the SSE event → screen 06; 20 s without a result → command ABANDON_OCR → screen 05
 ```
 
@@ -155,13 +163,14 @@ PWA ──POST /api/join {joinToken, action, displayName, …}──▶ join com
 | Camada | Escolha | Observação |
 |---|---|---|
 | Linguagem | TypeScript 5.x, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` | zero `any` (lint bloqueia) |
-| Runtime | Node.js 24 LTS | mesma versão em API, worker e CI |
+| Runtime | Node.js 24 LTS | mesma versão na API e no CI; a Vercel executa a função no runtime Node da mesma versão (`engines` no `package.json`) |
 | Gerenciador | pnpm workspaces | lockfile obrigatório |
 | HTTP | Express 5 | erros assíncronos tratados nativamente |
 | Validação e contratos | zod | schemas em `@cj/contracts`, usados no front e na API |
 | Banco | PostgreSQL 17 (Supabase) | schema `app` |
+| Plataforma | Vercel (estáticos + função Node, `gru1`) e Supabase (Postgres + Storage, São Paulo) | ADR-14, §16 |
 | Acesso ao banco | Drizzle ORM + `pg` (node-postgres); migrações com drizzle-kit | consultas parametrizadas sempre |
-| Filas e agendamento | pg-boss | schema `pgboss` no mesmo banco |
+| Agendamento | nenhum: OCR em background na própria invocação (`after`); jobs em `POST /api/cron/*` disparados pelo cron-job.org | §14 |
 | Rate limit | rate-limiter-flexible (store Postgres) | §12.7 |
 | Imagem | sharp (libvips) + file-type + heic-convert (só para HEIC) | §10 |
 | Storage | Supabase Storage (S3-compatível), bucket privado | §10.4 |
@@ -189,15 +198,12 @@ conta-juntos/
 │   │   ├── src/camera/           # capture and compression
 │   │   ├── src/strings/pt-BR.ts  # the only place with user-facing text (pt-BR)
 │   │   └── vite.config.ts
-│   ├── api/                      # Express
-│   │   ├── src/http/             # routes, middlewares, errors
-│   │   ├── src/app/              # application services (command pipeline, join, image)
+│   ├── api/                      # Express (embrulhado pela função da Vercel)
+│   │   ├── src/http/             # routes, middlewares, errors, cron endpoints
+│   │   ├── src/app/              # application services (command pipeline, join, image, ocr)
 │   │   ├── src/infra/            # db, storage, sse, notify, rate limit, crypto
 │   │   └── src/server.ts
-│   └── worker/                   # pg-boss workers
-│       ├── src/jobs/             # ocr, expirations, purges, side effects
-│       └── src/worker.ts
-├── packages/
+│   ├── packages/
 │   ├── core/                     # pure domain: types, calculation, derivation, commands (no I/O)
 │   │   ├── src/calc/             # largestRemainder, totals, allocation, shares
 │   │   ├── src/derive.ts
@@ -206,7 +212,7 @@ conta-juntos/
 │   ├── contracts/                # zod schemas for the API and events; generated types
 │   └── ocr/                      # ReceiptExtractor port, Google Vision adapter, pt-BR parser, fake
 ├── db/migrations/                # generated and reviewed SQL (drizzle-kit)
-├── infra/                        # Dockerfile, edge config, local compose
+├── infra/                        # vercel.json, edge config, local compose
 └── docs/                         # spec.md, spec_tecnica.md, ADRs
 ```
 
@@ -216,8 +222,7 @@ Regras de dependência (verificadas por lint de importações):
 core      → (nothing besides @noble/hashes)
 contracts → core (types only)
 ocr       → contracts
-api       → core, contracts, ocr (types), its own infra
-worker    → core, contracts, ocr
+api       → core, contracts, ocr, its own infra
 web       → core, contracts
 ```
 
@@ -363,7 +368,7 @@ Cada comando segue os mesmos passos dentro de `execute`:
 
 Quando o comando não muda nada (fechar uma conta já finalizada, resultado de OCR de tentativa não vigente), `execute` devolve `noChange: true`: a API grava só a operação (idempotência), sem nova revisão, sem evento e sem auditoria.
 
-`Effect` descreve trabalho fora do documento que a API executa na mesma transação ou enfileira (revogar sessões, enfileirar job, apagar objeto). `@cj/core` não executa efeitos.
+`Effect` descreve trabalho fora do documento que a API executa na mesma transação ou logo após o commit (revogar sessões, apagar objeto, disparar o OCR em background). `@cj/core` não executa efeitos.
 
 ### 4.4 Erros de domínio
 
@@ -550,22 +555,23 @@ create index audit_log_retention_idx on app.audit_log (created_at);
 ```
 
 - Todos os IDs de entidades são UUID v4 gerados com `crypto.randomUUID()` (aleatórios, não sequenciais nem ordenados por tempo).
-- O schema `pgboss` e a tabela do rate-limiter-flexible são criados pelas migrações, com `app_owner`. Em runtime, os dois rodam com a criação automática desligada (pg-boss com `migrate: false` e filas criadas na migração; rate-limiter-flexible com `tableCreated: true`). Os nomes exatos das opções devem ser conferidos na versão adotada de cada biblioteca.
+- A tabela do rate-limiter-flexible é criada pelas migrações, com `app_owner`. Em runtime, a criação automática fica desligada (rate-limiter-flexible com `tableCreated: true`). O nome exato da opção deve ser conferido na versão adotada da biblioteca.
 - Valores monetários dentro do documento são inteiros JSON; o Postgres não faz aritmética sobre eles.
 
 ### 5.3 Supabase
 
 | Tema | Configuração |
 |---|---|
-| Acesso | Só a API e o worker acessam o banco. O cliente nunca recebe a URL do projeto nem chaves do Supabase |
+| Acesso | Só a API acessa o banco e o Storage. O cliente nunca recebe a URL do projeto nem chaves do Supabase. A única exceção é o upload da foto: o navegador envia por URL assinada de uso único gerada pela API (§10.1), e o objeto é validado depois (§10.2) |
 | API de dados do Supabase (PostgREST/GraphQL) | Schema `app` fora de "Exposed schemas"; se nada mais usar a API de dados, desativá-la |
-| Papéis | `app_owner` (dono dos objetos, só para migrações); `app_runtime` (login da API e do worker: `select/insert/update/delete` nas tabelas de `app` e acesso ao schema `pgboss`; sem `create`, sem acesso a `public`, `auth` e `storage`) |
+| Papéis | `app_owner` (dono dos objetos, só para migrações); `app_runtime` (login da API: `select/insert/update/delete` nas tabelas de `app`; sem `create`, sem acesso a `public`, `auth` e `storage`) |
 | RLS | Ativado em todas as tabelas de `app`, com uma política `to app_runtime using (true) with check (true)`. `anon` e `authenticated` sem nenhum `grant`: defesa em profundidade caso o schema seja exposto por engano |
-| Conexões | `DATABASE_URL`: Supavisor em modo sessão, pool de 10 conexões por instância. `DATABASE_LISTEN_URL`: conexão direta ou Supavisor em modo sessão, 1 conexão dedicada por instância para `LISTEN` (o modo transação não suporta `LISTEN`) |
+| Conexões | `DATABASE_URL`: Supavisor em modo sessão, pool pequeno por instância da função (ex.: 5). `DATABASE_LISTEN_URL`: conexão direta ou Supavisor em modo sessão, 1 conexão dedicada por instância quente para `LISTEN` (o modo transação não suporta `LISTEN`); instâncias novas abrem a conexão na inicialização |
 | Timeouts | `statement_timeout = 5s` e `idle_in_transaction_session_timeout = 10s` no papel `app_runtime`; `lock_timeout = 3s` por transação de comando (§7.1) |
-| Região | São Paulo, a mesma das instâncias da API e do worker |
-| Backups | backup diário do plano; PITR opcional (RPO baixo não é crítico, §F9.8) |
+| Região | São Paulo, a mesma da função da API (`gru1` na Vercel) — o RTT API↔banco fica em poucos milissegundos |
+| Backups | O plano free não tem backup automático; para o MVP, exportações manuais periódicas (`pg_dump`) como salvaguarda. PITR e backup diário só em plano pago |
 | Ambientes | um projeto Supabase por ambiente (dev local com Supabase CLI, staging, produção) |
+| Teto do plano free | banco 500 MB e Storage 1 GB; monitorar o uso e alertar a 80% (OPS-02) |
 
 ### 5.4 Migrações e evolução do documento
 
@@ -578,13 +584,13 @@ create index audit_log_retention_idx on app.audit_log (created_at);
 | Dado | Retenção | Mecanismo |
 |---|---|---|
 | Conta e documento | até a exclusão (§F10.1 D1) | exclusão pelo criador |
-| Foto | 48 h após `closed_at`, ou imediata na exclusão | job `purge-images` (§14) |
-| Sessões | até expirar (30 dias sem uso) ou serem revogadas; linhas removidas 7 dias depois | job `purge-sessions` |
-| Segredos de reivindicação | 10 min | job `expire-claims` |
-| Idempotência | 24 h | job `purge-operations` |
-| Eventos | 5 min | job `purge-events` |
-| Presença | 10 min sem sinal (o estado "recente" usa os últimos 5 min) | job `purge-presence` |
-| Auditoria | 90 dias (provisório, §F10.2 T11) | job `purge-audit-log` |
+| Foto | 48 h após `closed_at`, ou imediata na exclusão | cron `purge-images` (§14) |
+| Sessões | até expirar (30 dias sem uso) ou serem revogadas; linhas removidas 7 dias depois | cron `purge-sessions` |
+| Segredos de reivindicação | 10 min | cron `expire-claims` |
+| Idempotência | 24 h | cron `purge-operations` |
+| Eventos | 5 min | cron `purge-events` |
+| Presença | 10 min sem sinal (o estado "recente" usa os últimos 5 min) | cron `purge-presence` |
+| Auditoria | 90 dias (provisório, §F10.2 T11) | cron `purge-audit-log` |
 
 ---
 
@@ -609,7 +615,8 @@ create index audit_log_retention_idx on app.audit_log (created_at);
 | `GET /api/bills/:billId` | sessão | 200 `{ me, snapshot }` | carga inicial, reconexão |
 | `GET /api/bills/:billId/events` | sessão | `text/event-stream` | tempo real (§8) |
 | `POST /api/bills/:billId/commands` | sessão | 200 `{ revision, snapshot, result? }` | todos os comandos de §6.4 |
-| `POST /api/bills/:billId/image` | sessão do criador, conta `DRAFT` | 202 `{ revision, snapshot, attemptId }` | upload da foto e início do OCR |
+| `POST /api/bills/:billId/image/upload-url` | sessão do criador, conta `DRAFT` | 200 `{ uploadUrl, objectKey, contentType, expiresAt }` | URL assinada de uso único para o `PUT` direto no Storage (§10.1) |
+| `POST /api/bills/:billId/image` | sessão do criador, conta `DRAFT` | 202 `{ revision, snapshot, attemptId }` | valida o objeto enviado e inicia o OCR |
 | `GET /api/bills/:billId/image` | sessão | `image/jpeg` | "Ver foto" (§10.5) |
 | `GET /api/bills/:billId/invite` | sessão | 200 `{ url }` | tela 11 (link e QR) |
 | `POST /api/bills/:billId/session/end` | sessão | 204 + cookie expirado | "Sair e apagar dados deste dispositivo" |
@@ -620,6 +627,7 @@ create index audit_log_retention_idx on app.audit_log (created_at);
 | `POST /api/claims/:id/complete` | cookie de pedido | 201 `{ me, snapshot }` + `Set-Cookie` | troca do pedido aprovado por sessão |
 | `GET /api/health` | nenhuma | 200 | liveness |
 | `GET /api/ready` | nenhuma | 200 / 503 | readiness (banco e LISTEN) |
+| `POST /api/cron/:job` | `Authorization: Bearer <CRON_SECRET>` | 200 / 404 | jobs agendados pelo cron-job.org (§14); sem o segredo, 404 com o mesmo corpo |
 
 `me = { participantId, isCreator }` só vai nas respostas diretas, nunca nos eventos (que são iguais para todos).
 
@@ -713,7 +721,7 @@ Em outros estados, a resposta é a mesma de link inválido (404), para não reve
 
 `DELETE_BILL` não passa pelo `UPDATE` do pipeline; tem a transação própria de §7.5.
 
-**De sistema** (só o worker; nunca expostos por HTTP): `START_OCR` (chamado pela rota de imagem), `APPLY_OCR_RESULT`, `FAIL_OCR`, `EXPIRE_OCR_ATTEMPT`, `EXPIRE_CLAIM`.
+**De sistema** (executados pela própria API em background ou pelos crons de §14; nunca expostos por HTTP): `START_OCR` (chamado pela rota de imagem), `APPLY_OCR_RESULT`, `FAIL_OCR`, `EXPIRE_OCR_ATTEMPT`, `EXPIRE_CLAIM`.
 
 `ROTATE_INVITE_LINK` incrementa `join_token_version` (coluna, fora do documento) no mesmo commit e gera um evento para que a tela 11 dos outros participantes busque o link novo.
 
@@ -801,14 +809,13 @@ O cliente decide o que mostrar: banners pessoais (`SHARE_REOPENED`, `ITEMS_CHANG
 12.   if r.ok:
         next = revision + 1
         UPDATE app.bills SET document, revision = next, status, updated_at, extracted columns
-        apply transactional effects (revoke sessions, join_token_version++,
-            enqueue pg-boss jobs through send's `db` option bound to the transaction client)
+        apply transactional effects (revoke sessions, join_token_version++)
         INSERT app.events (bill_id, next, eventId, payload = BillEvent)
         INSERT app.audit_log (r.audit entries, ip_hmac)
         INSERT app.operations (200, result without snapshot)
         SELECT pg_notify('bill_events', billId || ':' || next)
 13. COMMIT
-14. post-commit effects (Set-Cookie, close local streams) → 200
+14. post-commit effects (Set-Cookie, close local streams, efeitos com repetição como delete-image) → 200
 ```
 
 - O lock é sempre o primeiro acesso à conta na transação; nenhuma rota lê o documento para decidir uma escrita fora desse caminho.
@@ -816,7 +823,8 @@ O cliente decide o que mostrar: banners pessoais (`SHARE_REOPENED`, `ITEMS_CHANG
 - Erros de domínio também são gravados em `operations`: repetir um comando rejeitado devolve a mesma rejeição.
 - `operations` guarda só o resultado (status, código, `revision` produzida e o campo `result`), nunca o snapshot: com documentos de até 80 KB e 50 comandos por segundo no pico, guardar snapshots criaria gigabytes por hora. Na repetição, o snapshot anexado é o atual; como o cliente só aplica revisões maiores que a local (§8.2), isso é seguro.
 - `serverState` em 409 e 422 usa o snapshot do estado atual, que nunca inclui tokens (§F8.7).
-- Comandos de sistema (worker) seguem os mesmos passos 5 a 13, com ator `SYSTEM` e `operationId` determinístico: UUID v5 de `"<type>:<attempt or claim id>"` em um namespace fixo da aplicação. Isso cabe na coluna `uuid` e torna o reprocessamento de um job seguro.
+- Comandos de sistema (OCR e expirações, §9.5) seguem os mesmos passos 5 a 13, com ator `SYSTEM` e `operationId` determinístico: UUID v5 de `"<type>:<attempt or claim id>"` em um namespace fixo da aplicação. Isso cabe na coluna `uuid` e torna o reprocessamento seguro.
+- A rota de imagem devolve o 202 **antes** do OCR: o download, a chamada ao Vision e a aplicação do resultado rodam em `after()` na mesma invocação, fora da transação (§9.5). Não existe fila.
 
 ### 7.2 Por que isso atende às guardas da spec funcional
 
@@ -855,15 +863,17 @@ O cliente decide o que mostrar: banners pessoais (`SHARE_REOPENED`, `ITEMS_CHANG
 BEGIN
   SELECT … FROM app.bills WHERE id = $1 FOR UPDATE               (creator? confirmation "EXCLUIR"?)
   keep image_path
-  enqueue 'delete-image' {path} in the same commit (§14)
   DELETE FROM app.audit_log WHERE bill_id = $1
   INSERT app.audit_log (action = 'BILL_DELETED', bill_ref = HMAC(billId))
   UPDATE app.sessions SET revoked_at = now(), revocation_reason = 'DELETION' WHERE bill_id = $1
   SELECT pg_notify('bill_deleted', billId)                        (does not depend on any row)
   DELETE FROM app.bills WHERE id = $1                             (cascade: sessions, operations, events, presence, secrets)
 COMMIT
+→ post-commit: apaga o objeto da imagem (efeito com até 5 tentativas, §14)
 → 200 with the bill cookie expired
 ```
+
+Sem fila transacional, a remoção da imagem é um efeito pós-commit: se a invocação morrer antes de concluí-lo, o objeto fica órfão e o `sweep-orphan-images` (§10.4) o apaga — a linha da conta já não existe, então nada referenciará o objeto.
 
 Cada instância que recebe `bill_deleted` envia `event: deleted` para os streams daquela conta e os encerra. Sem a linha `events`, nada mais precisa ser lido.
 
@@ -873,7 +883,7 @@ Cada instância que recebe `bill_deleted` envia `event: deleted` para os streams
 
 ### 8.1 Conexão
 
-`GET /api/bills/:billId/events` com a sessão da conta. Resposta `text/event-stream`, `Cache-Control: no-store`. O proxy da borda não faz buffer nem compressão nessa rota (configuração do proxy, §16.3).
+`GET /api/bills/:billId/events` com a sessão da conta. Resposta `text/event-stream`, `Cache-Control: no-store`, enviada em streaming pela função sem middleware de compressão nessa rota (§16.3). No ambiente serverless a invocação tem duração máxima (`maxDuration`, §16.2): ao alcançá-la o stream é encerrado e o `EventSource` reconecta sozinho (`retry: 3000`), com o protocolo de §8.2 garantindo continuidade — nenhum evento se perde, pois todo `bill` traz o snapshot completo.
 
 ```text
 retry: 3000
@@ -932,7 +942,7 @@ Revogar sessões (sair, reivindicação, remoção, exclusão) faz `NOTIFY sessi
 
 ### 8.7 Encerramento gracioso
 
-Ao receber `SIGTERM`: para de aceitar conexões, envia `retry: 1000` e encerra os streams (os clientes reconectam em outra instância), drena requisições por até 10 s e sai.
+Ao receber `SIGTERM` (dev local e desligamentos com aviso): para de aceitar conexões, envia `retry: 1000` e encerra os streams (os clientes reconectam), drena requisições por até 10 s e sai. No ambiente serverless não há janela de desligamento garantida: o stream também termina no `maxDuration` ou quando a plataforma recicla a instância — em qualquer caso o cliente reconecta e refaz o `hello` (§8.2).
 
 ---
 
@@ -1022,31 +1032,34 @@ O parser é determinístico e testado com fixtures (§17.4).
 
 Em todos os casos: "nenhuma informação foi salva" e as ações [Tentar de novo], [Tirar outra foto] e [Digitar manualmente].
 
-### 9.5 Tentativas e jobs
+### 9.5 Tentativas e execução (sem fila)
 
 ```text
-image route (API), in the same transaction:
-  START_OCR → attempt T (PROCESSING), bill OCR_PROCESSING
-  boss.send('ocr',        {billId, attemptId: T}, {expireInSeconds: 25, retryLimit: 0, singletonKey: T, db: tx})
-  boss.send('ocr-expire', {billId, attemptId: T}, {startAfter: 25, db: tx})
+upload route (API):
+  POST /api/bills/:id/image/upload-url → signed PUT URL for the object (§10.1)
+  POST /api/bills/:id/image {operationId}:
+    HEAD object → validate size and type (§10.2) → transaction:
+      START_OCR → attempt T (PROCESSING), bill OCR_PROCESSING → COMMIT → 202 {attemptId}
 
-worker 'ocr':
+after() on the same invocation (background, no queue):
   download image → ReceiptExtractor.extract(signal = 18 s total budget; client gives up at 20 s; server expires at 25 s)
   ok    → APPLY_OCR_RESULT(T, receipt)        (operationId = UUIDv5("APPLY_OCR_RESULT:T"))
   error → FAIL_OCR(T, code)
+  in parallel: setTimeout(25 s) → EXPIRE_OCR_ATTEMPT(T)  (only if T is still PROCESSING)
 
 APPLY_OCR_RESULT / FAIL_OCR in core:
   if T ≠ ocrAttempt.id or attempt ≠ PROCESSING or bill ≠ OCR_PROCESSING → noChange (log "ocr_result_discarded")
 
-worker 'ocr-expire':
-  EXPIRE_OCR_ATTEMPT(T) → if still PROCESSING: EXPIRED and bill OCR_FAILED (OCR-03)
+cron sweep POST /api/cron/ocr-sweep (every minute, CRON_SECRET):
+  EXPIRE_OCR_ATTEMPT for attempts still PROCESSING older than 2 min (safety net)
 
 client:
   20 s without a result event → ABANDON_OCR(T) → CANCELLED, bill OCR_FAILED → screen 05
 ```
 
 - O checklist da tela 04 é progressão visual ligada ao tempo decorrido. "Imagem recebida" só aparece após o 202 e o resto nunca é marcado como concluído antes do evento com o resultado.
-- Concorrência do worker: 4 jobs `ocr` por instância. Cota do Vision e limite por conta em §12.7.
+- Orçamento: o `extract` recebe um `AbortSignal` de 18 s; o `after()` roda fora do caminho de resposta, então o 202 já foi entregue. Se a invocação morrer antes do resultado (queda ou limite da plataforma), a tentativa fica `PROCESSING`, o cliente abandona aos 20 s e o sweep de 2 min a expira com `OCR-03` — nenhum estado fica preso.
+- Cota do Vision e limite por conta em §12.7. Não há workers nem concorrência de fila: cada upload tem sua própria invocação em background.
 
 ### 9.6 Qualidade do OCR
 
@@ -1063,16 +1076,19 @@ client:
 
 1. Câmera: `input type="file" accept="image/*" capture="environment"` como caminho principal (mais confiável em PWA no iOS); visor com `getUserMedia` quando disponível, com moldura e lanterna (`torch`) só se o dispositivo suportar.
 2. Galeria: `input type="file" accept="image/*"`.
-3. Compressão: `createImageBitmap(file, { imageOrientation: 'from-image' })` → canvas com lado maior ≤ 2.400 px → `toBlob('image/jpeg', 0.85)`; se passar de 4 MB, qualidade 0,7. Se o navegador não decodificar o arquivo (HEIC fora do Safari), envia o original se tiver até 10 MB.
-4. Envio: `multipart/form-data`, campo `image`, mais `operationId`.
+3. Compressão: `createImageBitmap(file, { imageOrientation: 'from-image' })` → canvas com lado maior ≤ 2.400 px → `toBlob('image/jpeg', 0.85)`; se passar de 4 MB, qualidade 0,7. Se o navegador não decodificar o arquivo (HEIC fora do Safari), envia o original se tiver até 10 MB, declarando o tipo real na geração da URL assinada.
+4. Envio: `POST /api/bills/:id/image/upload-url` com `{ operationId, contentType }` → devolve uma URL assinada de uso único (PUT, expira em ~5 min, tipo fixado na assinatura, objeto ≤ 10 MB); o `PUT` vai direto ao Supabase Storage — o corpo da foto **não passa pela API**, contornando o limite de 4,5 MB por requisição (§1.2). Em seguida, `POST /api/bills/:id/image` com o mesmo `operationId` confirma o envio e inicia o OCR.
 
 ### 10.2 Validação no servidor
 
+Depois do `PUT` na URL assinada, a rota `POST /image` valida o objeto **antes** do `START_OCR`:
+
 | Verificação | Regra |
 |---|---|
-| Tamanho | multer em memória, `fileSize` ≤ 10 MB, 1 arquivo, sem outros campos de arquivo → 413 |
-| Tipo real | `file-type` pela assinatura do arquivo; allowlist `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/heif` → 415 |
-| Nome | o nome enviado é ignorado |
+| Existência | `HEAD` no objeto; ausente → 404 |
+| Tamanho | objeto ≤ 10 MB (limite também embutido na URL assinada); acima → 413 e remoção do objeto |
+| Tipo real | `file-type` pela assinatura do arquivo; allowlist `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `image/heif` → 415; o tipo declarado na geração da URL deve coincidir |
+| Nome | a chave é gerada no servidor; nenhum trecho vem do cliente (sem path traversal) |
 | HEIC | lê as dimensões no cabeçalho do contêiner antes de decodificar (rejeita acima de 40 megapixels); converte com heic-convert em um `worker_thread` com limite de memória (`resourceLimits`) e timeout de 5 s |
 | Decodificação | `sharp(buffer, { limitInputPixels: 40_000_000, failOn: 'error' })`; falha → 415 |
 | Estado | sessão do criador e conta em `DRAFT` (senão 422) |
@@ -1084,10 +1100,10 @@ client:
 ### 10.4 Armazenamento
 
 - Bucket privado `receipts` no Supabase Storage. Chave gerada no servidor: `bills/<billId>/<uuid>.jpg`; nenhum trecho vem do cliente (sem risco de path traversal).
-- Acesso só pela API e pelo worker, com a chave de serviço do Storage (segredo de servidor; nunca no cliente).
-- Uma imagem por conta: `START_OCR`, "tirar outra foto" e "descartar leitura" enfileiram a remoção da imagem anterior, se houver.
-- **Ordem do upload:** a rota verifica a idempotência (`operationId`) antes de enviar ao Storage; envia o objeto; depois roda o comando. Se o comando falhar ou a transação for desfeita, a rota apaga o objeto que acabou de enviar.
-- **Varredura:** o job diário `sweep-orphan-images` apaga objetos com mais de 1 h que não estão em nenhum `image_path` (cobre falhas entre o upload e a compensação, e remoções que esgotaram as tentativas).
+- Acesso de leitura e remoção só pela API, com a chave de serviço do Storage (segredo de servidor; nunca no cliente). A exceção é o upload: o navegador envia por URL assinada de uso único (§10.1), gerada com tipo, tamanho máximo e expiração fixados; o servidor valida o objeto depois do `PUT` (§10.2).
+- Uma imagem por conta: `START_OCR`, "tirar outra foto" e "descartar leitura" disparam a remoção da imagem anterior como efeito pós-commit com repetição (§14), se houver.
+- **Ordem do upload:** o cliente pede a URL assinada, envia o objeto com `PUT` direto ao Storage e só então chama `POST /image`, que confirma a existência, valida (§10.2), roda `START_OCR` e, se o comando falhar, apaga o objeto. Um `PUT` sem o `POST /image` deixa um objeto órfão.
+- **Varredura:** o cron diário `sweep-orphan-images` apaga objetos com mais de 1 h que não estão em nenhum `image_path` (cobre `PUT`s abandonados, falhas entre o upload e a compensação, remoções pós-commit que morreram e remoções que esgotaram as tentativas).
 
 ### 10.5 Entrega
 
@@ -1095,7 +1111,7 @@ client:
 
 ### 10.6 Purga
 
-Job `purge-images` a cada hora: contas com `closed_at < now() - interval '48 hours'` e `image_path` preenchido → apaga o objeto → `image_path = null`. Na exclusão da conta, o efeito `delete-image` é enfileirado na mesma transação e executado logo depois, com até 5 novas tentativas (CA-H10).
+Cron `purge-images` a cada hora: contas com `closed_at < now() - interval '48 hours'` e `image_path` preenchido → apaga o objeto → `image_path = null`. Na exclusão da conta, a remoção do objeto roda como efeito pós-commit com até 5 novas tentativas (CA-H10); se a invocação morrer, o `sweep-orphan-images` cobre.
 
 ---
 
@@ -1126,7 +1142,7 @@ link      = https://contajuntos.app/entrar#t=<joinToken>
 | Leitura | a rota da conta lê só o cookie daquela conta; sem ele → 401 |
 | Revogação | `revoked_at` + `revocation_reason`; `NOTIFY session_revoked` (§8.6) |
 | Sair e apagar | `POST /api/bills/:id/session/end` → revoga, responde com o cookie expirado (`Max-Age=0`); o cliente apaga o cache local daquela conta |
-| Expiração | job diário marca `EXPIRATION` e remove linhas 7 dias depois |
+| Expiração | cron diário marca `EXPIRATION` e remove linhas 7 dias depois |
 
 Sessões não guardam nome, IP nem user agent. A auditoria usa `participantId` e IP como HMAC (§12.9).
 
@@ -1149,7 +1165,7 @@ client: POST /api/claims/:id/complete (claim cookie)
   → 201 {me, snapshot} + Set-Cookie with the session
 ```
 
-O job `expire-claims` (a cada minuto) aplica `EXPIRE_CLAIM` às pendentes com mais de 10 min.
+O endpoint `/api/cron/expire-claims` (a cada minuto) aplica `EXPIRE_CLAIM` às pendentes com mais de 10 min.
 
 ### 11.4 Autorização
 
@@ -1177,7 +1193,7 @@ Aplicando as regras de segurança Node.js da skill `meli-security-expert`. As bi
 | Identidade de fonte confiável | só a sessão (§11.4) |
 | Sem GET que altere estado | todas as mutações são `POST`; `complete` da reivindicação é `POST` |
 | Sem CORS | mesma origem; nenhum middleware de CORS |
-| Sem cabeçalhos de segurança na aplicação | aplicados na borda (§12.6); a API só define `Content-Type`, `Cache-Control`, `Set-Cookie`, `Retry-After` |
+| Cabeçalhos de segurança | no `vercel.json` para o estático e no Express (helmet ou manual) para `/api/*` (§12.6, ADR-12); além deles, a API só define `Content-Type`, `Cache-Control`, `Set-Cookie`, `Retry-After` |
 | Sem cabeçalhos HTTP customizados | `operationId`, versões e bases vão no corpo; nenhum `X-*` próprio |
 | Chamada externa só para destino fixo | Vision por URL constante de allowlist; `redirect: 'error'`; timeout (§9.2) |
 | Sem `Math.random`; IDs aleatórios não sequenciais | `crypto.randomUUID()` (v4) e `crypto.randomBytes`; lint proíbe `Math.random` |
@@ -1218,8 +1234,9 @@ Aplicando as regras de segurança Node.js da skill `meli-security-expert`. As bi
 | `JOIN_TOKEN_KEYS`, `JOIN_TOKEN_CURRENT_KID` | §11.1 |
 | `IP_HMAC_KEY` | auditoria e chaves de rate limit |
 | `GOOGLE_SA_JSON` (ou federação) | Vision |
+| `CRON_SECRET` | endpoints `/api/cron/*` (§14) |
 
-Rotação a cada 90 dias (ou imediata em suspeita de vazamento). Segredos nunca em logs, imagens de container, variáveis de build do front ou repositório (varredura com gitleaks no CI).
+Rotação a cada 90 dias (ou imediata em suspeita de vazamento). Segredos nunca em logs, variáveis de build do front, configurações públicas da plataforma ou repositório (varredura com gitleaks no CI).
 
 ### 12.4 Banco e Storage
 
@@ -1227,9 +1244,11 @@ Rotação a cada 90 dias (ou imediata em suspeita de vazamento). Segredos nunca 
 
 ### 12.5 CSRF
 
-Toda requisição com método diferente de `GET` e `HEAD` exige `Origin` igual a `APP_ORIGIN`. Sem `Origin`, aceita apenas `Sec-Fetch-Site: same-origin`. Caso contrário, 403. Endpoints JSON exigem `Content-Type: application/json`; o de imagem, `multipart/form-data`.
+Toda requisição com método diferente de `GET` e `HEAD` exige `Origin` igual a `APP_ORIGIN`. Sem `Origin`, aceita apenas `Sec-Fetch-Site: same-origin`. Caso contrário, 403. Endpoints JSON (inclusive os de upload-url e de imagem) exigem `Content-Type: application/json`; o `PUT` na URL assinada não passa pela API — o tipo do objeto é fixado na geração da URL e revalidado no servidor (§10.2).
 
-### 12.6 Cabeçalhos na borda (ADR-12)
+### 12.6 Cabeçalhos de segurança (ADR-12)
+
+Os cabeçalhos abaixo são aplicados em dois pontos com o mesmo valor: no `vercel.json` para o app estático e pelo Express para as respostas de `/api/*` (a Vercel não permite configurar cabeçalhos de resposta de função na borda).
 
 | Cabeçalho | Valor |
 |---|---|
@@ -1240,11 +1259,11 @@ Toda requisição com método diferente de `GET` e `HEAD` exige `Origin` igual a
 | `Permissions-Policy` | `camera=(self), microphone=(), geolocation=()` |
 | `Cross-Origin-Opener-Policy` | `same-origin` |
 
-O build do Tailwind gera CSS em arquivo, mas bibliotecas de UI acessível (o bloqueio de rolagem usado por Radix e vaul) injetam elementos `<style>` em runtime. Por isso `style-src` admite `'unsafe-inline'`; `script-src` continua sem nenhuma exceção, que é onde está o risco de XSS. Em M0, testar a política em modo `Report-Only`: se nenhuma violação de estilo aparecer, retirar `'unsafe-inline'`. Servir os estáticos de CDN dificulta usar nonce por resposta.
+O build do Tailwind gera CSS em arquivo, mas bibliotecas de UI acessível (o bloqueio de rolagem usado por Radix e vaul) injetam elementos `<style>` em runtime. Por isso `style-src` admite `'unsafe-inline'`; `script-src` continua sem nenhuma exceção, que é onde está o risco de XSS. Em M1, testar a política em modo `Report-Only`: se nenhuma violação de estilo aparecer, retirar `'unsafe-inline'`. O CSP é único entre estático e API (mesmo valor nos dois pontos), então não usa nonce por resposta.
 
 ### 12.7 Rate limits
 
-Chaves com `HMAC(IP)` (IP vindo do proxy confiável, com `trust proxy` igual ao número exato de saltos) ou com o ID da sessão.
+Chaves com `HMAC(IP)` (IP de `req.ip` com `trust proxy` ativo — a Vercel envia o endereço do cliente no `X-Forwarded-For`, com exatamente um salto de proxy confiável) ou com o ID da sessão.
 
 | Ação | Limite |
 |---|---|
@@ -1361,26 +1380,29 @@ interface BillState {
 
 ---
 
-## 14. Jobs e tarefas agendadas (pg-boss)
+## 14. Jobs e tarefas agendadas
+
+Sem fila nem worker residente (ADR-07). Toda tarefa é ou (a) trabalho em background na própria invocação, via `after()`, ou (b) um endpoint `POST /api/cron/<job>` disparado de fora.
 
 | Job | Gatilho | Ação | Idempotência |
 |---|---|---|---|
-| `ocr` | enfileirado pela rota de imagem | §9.5 | `singletonKey = attemptId`; comando com `operationId` UUID v5 derivado da tentativa |
-| `ocr-expire` | 25 s após o início | `EXPIRE_OCR_ATTEMPT` | sem efeito se a tentativa não estiver `PROCESSING` |
-| `delete-image` | efeito de exclusão, descarte ou nova foto | apaga o objeto no Storage | apagar objeto inexistente é sucesso; 5 tentativas com backoff |
-| `expire-claims` | cron, a cada minuto | `EXPIRE_CLAIM` nas pendentes com mais de 10 min | por reivindicação |
-| `purge-images` | cron, a cada hora | §10.6 | condição na própria consulta |
-| `sweep-orphan-images` | cron, diário | §10.4 | objeto referenciado nunca é apagado |
-| `purge-sessions` | cron, diário | marca expiradas; apaga revogadas ou expiradas há mais de 7 dias | condição na consulta |
-| `purge-operations` | cron, a cada 10 min | apaga `operations` e `entry_operations` com mais de 24 h, em lotes de 5.000 linhas | idem |
-| `purge-events` | cron, a cada minuto | apaga `events` com mais de 5 min, em lotes de 5.000 linhas | idem |
-| `purge-presence` | cron, a cada minuto | apaga presença sem sinal há mais de 10 min | idem |
-| `purge-audit-log` | cron, diário | apaga auditoria com mais de 90 dias | idem |
-| `product-metrics` | cron, a cada 15 min | grava métricas de §15.3 | sobrescreve a janela |
+| OCR | `after()` na invocação do `POST /image` | §9.5 | comando com `operationId` UUID v5 derivado da tentativa |
+| `ocr-sweep` | `/api/cron/ocr-sweep`, 1/min | `EXPIRE_OCR_ATTEMPT` em tentativas `PROCESSING` com mais de 2 min | sem efeito se a tentativa não estiver `PROCESSING` |
+| `delete-image` | efeito pós-commit de exclusão, descarte ou nova foto | apaga o objeto no Storage | apagar objeto inexistente é sucesso; 5 tentativas com backoff |
+| `expire-claims` | `/api/cron/expire-claims`, 1/min | `EXPIRE_CLAIM` nas pendentes com mais de 10 min | por reivindicação |
+| `purge-images` | `/api/cron/purge-images`, 1/h | §10.6 | condição na própria consulta |
+| `sweep-orphan-images` | `/api/cron/sweep-orphan-images`, diário | §10.4 | objeto referenciado nunca é apagado |
+| `purge-sessions` | `/api/cron/purge-sessions`, diário | marca expiradas; apaga revogadas ou expiradas há mais de 7 dias | condição na consulta |
+| `purge-operations` | `/api/cron/purge-operations`, 10 min | apaga `operations` e `entry_operations` com mais de 24 h, em lotes de 5.000 linhas | idem |
+| `purge-events` | `/api/cron/purge-events`, 1/min | apaga `events` com mais de 5 min, em lotes de 5.000 linhas | idem |
+| `purge-presence` | `/api/cron/purge-presence`, 1/min | apaga presença sem sinal há mais de 10 min | idem |
+| `purge-audit-log` | `/api/cron/purge-audit-log`, diário | apaga auditoria com mais de 90 dias | idem |
+| `product-metrics` | `/api/cron/product-metrics`, 15 min | publica métricas de §15.3 como gauges OpenTelemetry | sobrescreve a janela |
 
-Os jobs rodam no worker. Jobs que mudam o documento passam pelo pipeline de §7 com ator `SYSTEM`.
-
-**Enfileiramento transacional:** todo `send` feito durante um comando usa a opção `db` do pg-boss com o cliente da transação corrente, para que um ROLLBACK também desfaça o job (ex.: `delete-image` nunca roda para uma imagem que continua referenciada). Se a versão adotada do pg-boss não suportar isso, usar uma tabela `app.side_effects` gravada na transação e despachada por um job que a lê (outbox).
+- **Autenticação dos endpoints de cron:** `Authorization: Bearer <CRON_SECRET>`; sem o segredo (ou com corpo/caminho desconhecido), a resposta é 404 com o mesmo corpo, sem revelar a existência da rota. Os gatilhos (intervalos e horários) ficam no cron-job.org — plano free, intervalo mínimo de 1 minuto —, um job por linha da tabela, com o segredo armazenado no gerenciador de credenciais do serviço (task INF-11 de `tasks.md`).
+- **Sem enfileiramento transacional:** os efeitos pós-commit (`delete-image`, remoção da imagem anterior) rodam na própria invocação com repetição; se a invocação morrer, o `sweep-orphan-images` cobre. Os jobs da tabela são redesenhados para serem tardios e seguros: atrasar alguns minutos não quebra consistência (expirações e purgas são monotônicas).
+- Jobs que mudam o documento passam pelo pipeline de §7 com ator `SYSTEM`.
+- **Limites do plano free:** a invocação de cron tem o mesmo orçamento de 300 s da API (§16.2); lotes de 5.000 linhas cabem com folga. O intervalo de 1 minuto do agendador basta para expirações (TTL de 10 min) e sweeps; ele não serve para o OCR (orçamento de 18 s, roda em `after()`) nem para o tempo real (SSE, §8).
 
 ---
 
@@ -1407,7 +1429,8 @@ Os jobs rodam no worker. Jobs que mudam o documento passam pelo pipeline de §7 
 | `ocr_duration_ms` por provedor | histograma | meta de 8 s p95 |
 | `ocr_result_total` por código | contador | qualidade do OCR |
 | `ocr_result_discarded_total` | contador | resultados tardios (§6.2) |
-| `pgboss_queue_lag_s` por fila | gauge | jobs atrasados |
+| `cron_run_total` por job | contador | execuções e falhas dos endpoints `/api/cron/*` |
+| `ocr_inflight` | gauge | OCRs em andamento (`after()`) |
 | `db_pool_in_use` | gauge | dimensionamento |
 | `rate_limit_blocked_total` por chave | contador | abuso |
 
@@ -1426,9 +1449,9 @@ Calculadas pelo job `product-metrics` a partir de `app.bills` e `app.audit_log`,
 | `listen_connected = 0` em alguma instância por 1 min | alta |
 | `InvariantError` (qualquer ocorrência) | alta |
 | OCR com falha > 30% em 15 min | média |
-| atraso da fila `ocr` > 10 s | média |
+| tentativa de OCR `PROCESSING` por mais de 2 min (varredura não roda) | média |
 | pool do banco > 80% por 5 min | média |
-| job de purga sem sucesso por 3 h | média (privacidade) |
+| cron de purga sem sucesso por 3 h (agendador fora do ar ou endpoint falhando) | média (privacidade) |
 
 ---
 
@@ -1436,29 +1459,30 @@ Calculadas pelo job `product-metrics` a partir de `app.bills` e `app.audit_log`,
 
 ### 16.1 Ambientes
 
-| Ambiente | Banco e Storage | OCR | Uso |
-|---|---|---|---|
-| Local | Supabase CLI (`supabase start`) | `FakeExtractor` | desenvolvimento |
-| CI | Postgres em container na mesma versão do Supabase | `FakeExtractor` | testes |
-| Staging | projeto Supabase de staging | Vision (cota baixa) | homologação, testes de carga |
-| Produção | projeto Supabase de produção (São Paulo) | Vision | usuários |
+| Ambiente | Plataforma | Banco e Storage | OCR | Uso |
+|---|---|---|---|---|
+| Local | compose (API, web e Postgres) | Supabase CLI (`supabase start`) | `FakeExtractor` | desenvolvimento |
+| CI | runner do GitHub Actions | Postgres em container na mesma versão do Supabase | `FakeExtractor` | testes |
+| Staging | projetos Vercel e Supabase de staging; cron-job.org apontando para o staging | projeto Supabase de staging (São Paulo) | Vision (cota baixa) | homologação, testes de carga |
+| Produção | Vercel (`gru1`) + cron-job.org de produção | projeto Supabase de produção (São Paulo) | Vision | usuários |
 
-### 16.2 Containers
+### 16.2 Plataforma (Vercel)
 
-- Uma imagem para API e worker (`node:24-slim` ou distroless), com entrypoints `dist/server.js` e `dist/worker.js`.
-- Usuário não-root, sistema de arquivos só leitura (exceto `/tmp`), porta 8080, `--enable-source-maps`.
-- Plataforma de containers com conexões HTTP longas (SSE de vários minutos), escala horizontal e região São Paulo. Escolha do fornecedor em aberto (§19).
-- API: no mínimo 2 instâncias; autoescala por CPU e por streams ativos. Worker: 1 a 2 instâncias.
-- Health: `/api/health` (processo vivo) e `/api/ready` (banco e `LISTEN` ok).
+- **Um projeto Vercel, duas aplicações:** `apps/web` como projeto estático (build do Vite) e `apps/api` como função Node que embrulha o Express (`export default app` no handler da função; runtime Node na mesma versão de `engines`). Sem containers em produção — Docker fica só para o Postgres de CI e do ambiente local.
+- **Streams SSE** no runtime Node: a resposta em streaming sustenta conexões de vários minutos; `maxDuration` (exportado da função, 300 s no Hobby) encerra o stream no limite, e o cliente reconecta (§8.1, §8.7). Nenhum middleware de compressão pode tocar na rota de eventos.
+- **Região `gru1` (São Paulo):** mesma região do Supabase (§5.3), minimizando o RTT API↔banco no caminho transacional e a latência percebida pelo usuário.
+- **Escala:** a Vercel provisiona instâncias por requisição; o fan-out multi-instância via `LISTEN/NOTIFY` (§8.4) é o caminho natural, sem configuração extra. O plano free limita concorrência e duração (§1.2); o caminho de crescimento é o plano Pro, sem mudança de código.
+- **Health:** `/api/health` (processo) e `/api/ready` (banco e `LISTEN`), usados pelos smoke tests.
+- **Segredos:** no gerenciador de variáveis de ambiente da Vercel (Apêndice B), por ambiente.
 
 ### 16.3 Borda (CDN e proxy)
 
-- Domínio `contajuntos.app` com TLS.
-- `/assets/*`: cache imutável (nomes com hash). `index.html` e `sw.js`: `no-cache`.
-- `/api/*`: encaminhado para a API sem cache; repassa o IP do cliente em um único cabeçalho padrão confiável.
-- `/api/bills/*/events`: sem buffer e sem compressão; timeout ocioso ≥ 120 s (há `ping` a cada 15 s).
-- Cabeçalhos de segurança de §12.6 em todas as respostas.
-- Compressão gzip/brotli nas demais respostas.
+- Domínio `contajuntos.app` com TLS gerenciado pela Vercel (domínio customizado no projeto).
+- `/assets/*`: cache imutável (nomes com hash). `index.html` e `sw.js`: `no-cache` — ambos os casos no `vercel.json`.
+- `/api/*`: encaminhado para a função sem cache; o `X-Forwarded-For` da Vercel é a fonte do IP do cliente (`trust proxy`, §12.7).
+- `/api/bills/*/events`: streaming sem compressão nem buffer (nenhum middleware de compressão nessa rota; §8.1).
+- Cabeçalhos de segurança de §12.6: estáticos via `vercel.json`; `/api/*` pelo Express (ADR-12).
+- Compressão gzip/brotli automática da Vercel nas respostas estáticas e JSON.
 
 ### 16.4 CI/CD
 
@@ -1466,12 +1490,15 @@ Calculadas pelo job `product-metrics` a partir de `app.bills` e `app.audit_log`,
 pull request: install (pnpm, lockfile) → lint → typecheck → unit and property tests (core)
               → integration (API + Postgres) → E2E (Playwright, local compose) → build
               → pnpm audit → gitleaks → CodeQL
-main:         image build + SBOM → staging migrations → staging deploy → smoke tests
-release:      manual approval → production migrations (separate job) → gradual deploy → smoke tests
+main:         Vercel deploy preview automático (Git integration); migração via Actions quando houver
+release:      aprovação manual → migração de produção (supabase db push, job separado)
+              → promote do deploy na Vercel → smoke tests
 ```
 
-- Migrações rodam antes do deploy e sempre são compatíveis com a versão anterior do código (§5.4).
-- Rollback: reimplantar a imagem anterior; migrações nunca removem colunas na mesma versão em que deixam de usá-las.
+- A Vercel publica previews a cada pull request pela integração com o Git; produção só com aprovação.
+- Migrações rodam **antes** do promote e sempre são compatíveis com a versão anterior do código (§5.4).
+- Rollback: reverter o deploy na Vercel (instantâneo); migrações nunca removem colunas na mesma versão em que deixam de usá-las.
+- Cron-job.org: um conjunto de jobs por ambiente (staging e produção), com `CRON_SECRET` distinto; configuração versionada como código em `infra/cron-jobs/` e aplicada via API do serviço (task INF-11 de `tasks.md`).
 - Cobertura mínima: `@cj/core` ≥ 95% de linhas e 90% de ramos; demais pacotes ≥ 80%.
 
 ---
@@ -1533,7 +1560,7 @@ k6 com 300 contas simultâneas × 6 streams SSE e 50 comandos por segundo. Crit�
 
 ### 17.7 Segurança
 
-Testes automatizados para atributos de cookie, rejeição por `Origin`, ausência de token em logs (inspeção dos logs do teste), payload de XSS em todos os campos de texto (CA-H6), upload malformado, rate limit (CA-H1) e cabeçalhos da borda em staging. Varredura DAST de base em staging a cada release.
+Testes automatizados para atributos de cookie, rejeição por `Origin`, ausência de token em logs (inspeção dos logs do teste), payload de XSS em todos os campos de texto (CA-H6), upload malformado, rate limit (CA-H1) e cabeçalhos de segurança (§12.6) em staging. Varredura DAST de base em staging a cada release.
 
 ---
 
@@ -1549,7 +1576,7 @@ Testes automatizados para atributos de cookie, rejeição por `Origin`, ausênci
 | M5 Privacidade e operação | tela 28, exclusão, anonimização, purgas, rate limits, cabeçalhos, observabilidade, acessibilidade, carga, avaliação do OCR | CA-H1 a CA-H11, §F11.I, §17.6, meta de §9.6 |
 | M6 Beta fechado | uso real com grupos convidados | métricas de §15.3 sem bloqueadores |
 
-Spikes antes de M1 e M3 (§19): qualidade do Vision com o parser e SSE de longa duração na plataforma escolhida.
+Spikes antes de M1 (§19): qualidade do Vision com o parser e SSE de longa duração na plataforma (Vercel).
 
 ---
 
@@ -1558,13 +1585,14 @@ Spikes antes de M1 e M3 (§19): qualidade do Vision com o parser e SSE de longa 
 | # | Item | Tipo | Ação |
 |---|---|---|---|
 | RT1 | Qualidade do Vision + parser próprio em comandas brasileiras (layouts variados, impressão térmica apagada) | risco alto | spike com o corpus antes de M1; meta de §9.6; adapters alternativos prontos para comparação |
-| RT2 | Conexões SSE longas e sem buffer na plataforma e na CDN escolhidas | risco médio | spike antes de M3; plano B: WebSocket (§F10.2 T2) mantendo o mesmo protocolo de mensagens |
-| RT3 | `LISTEN` no Supabase exige conexão direta ou modo sessão do pooler | risco médio | validar no spike de M3; plano B: Redis pub/sub só para o fan-out |
+| RT2 | SSE no runtime serverless: corte no `maxDuration`, reconexão, streaming sem buffer | risco médio | spike em M0 (SPK-02): stream de 10 min com corte e reconexão sem perda (hello + snapshot), latência commit → evento; plano B: WebSocket (§F10.2 T2) mantendo o mesmo protocolo de mensagens |
+| RT3 | `LISTEN` no Supabase exige conexão direta ou modo sessão do pooler | risco médio | validar no spike de M0 (SPK-02); plano B: Redis pub/sub só para o fan-out |
 | RT4 | Evolução do formato do documento JSONB | risco baixo | `migrateDocument` e testes por versão (§5.4) |
 | RT5 | Conversão de HEIC no servidor é lenta (1 a 2 s) | risco baixo | o cliente já envia JPEG na maioria dos casos; medir |
 | RT6 | Custo e cota do Vision | risco baixo | rate limit por conta; métrica por conta; alerta de custo |
 | RT7 | Cookies separados entre navegadores e app instalado (iOS) | risco conhecido | reivindicação (§11.3); métrica de reivindicações |
-| A1 | Fornecedor da plataforma de containers e da CDN | aberta | escolher no spike de M3 (requisitos em §16.2 e §16.3) |
+| RT8 | Limites do plano free da Vercel (duração de 300 s, concorrência, upload de 4,5 MB) e do Supabase free (500 MB de banco, 1 GB de Storage, 200 conexões SSE na borda do projeto) | risco baixo | nenhum fluxo do MVP passa de 18 s; upload por URL assinada (§10.1); monitorar uso (OPS-02) e subir de plano se necessário — sem mudança de código |
+| A1 | **Fechada (ADR-14):** Vercel Hobby (estáticos e API) + Supabase free (banco e Storage) + cron-job.org (agendador) | fechada | revisar no crescimento (teto de streams, duração e Storage) |
 | A2 | Fornecedor de observabilidade e de rastreamento de erros | aberta | qualquer backend OTLP; ferramenta de erros com limpeza de dados pessoais |
 | A3 | Endpoint regional do Vision e confirmação de retenção no contrato | aberta | decidir antes do lançamento (§9.2) |
 | A4 | Domínio definitivo e marca | aberta | depende de §F10.1 D12 |
@@ -1596,31 +1624,32 @@ Spikes antes de M1 e M3 (§19): qualidade do Vision com o parser e SSE de longa 
 | §F9.5 Privacidade | §5.5, §10, §12.9, §14 |
 | §F9.6 e §F9.7 Acessibilidade e responsividade | §13.8, §17.5 |
 | §F9.8 Operação | §15, §16 |
-| §F10.2 Decisões técnicas T1 a T12 | ADR-01 a ADR-13, §9, §12.5, §19 |
+| §F10.2 Decisões técnicas T1 a T12 | ADR-01 a ADR-14, §9, §12.5, §19 |
 | §F11 Aceites | §17, §18 |
 
 ## Apêndice B. Variáveis de ambiente
 
 | Variável | Componente | Obrigatória | Descrição |
 |---|---|---|---|
-| `NODE_ENV` | API, worker | sim | `production` / `staging` / `development` |
+| `NODE_ENV` | API | sim | `production` / `staging` / `development` |
 | `APP_ORIGIN` | API | sim | `https://contajuntos.app`; base do link e da verificação de `Origin` |
-| `PORT` | API | não | padrão 8080 |
-| `TRUST_PROXY_HOPS` | API | sim | número exato de proxies à frente da API |
-| `DATABASE_URL` | API, worker | sim | Supavisor em modo sessão, papel `app_runtime` |
+| `PORT` | API | não | padrão 8080 (dev local; a Vercel ignora) |
+| `TRUST_PROXY_HOPS` | API | sim | `1` (proxy único da Vercel) |
+| `DATABASE_URL` | API | sim | Supavisor em modo sessão, papel `app_runtime` |
 | `DATABASE_LISTEN_URL` | API | sim | conexão para `LISTEN` |
-| `DB_POOL_MAX` | API, worker | não | padrão 10 |
-| `SUPABASE_URL` | API, worker | sim | projeto (Storage) |
-| `SUPABASE_STORAGE_KEY` | API, worker | sim | chave de serviço do Storage (segredo) |
-| `STORAGE_BUCKET` | API, worker | não | padrão `receipts` |
+| `DB_POOL_MAX` | API | não | padrão 5 (pool por instância da função) |
+| `SUPABASE_URL` | API | sim | projeto (Storage) |
+| `SUPABASE_STORAGE_KEY` | API | sim | chave de serviço do Storage (segredo) |
+| `STORAGE_BUCKET` | API | não | padrão `receipts` |
 | `JOIN_TOKEN_KEYS` | API | sim | keyring JSON `{kid: base64}` (segredo) |
 | `JOIN_TOKEN_CURRENT_KID` | API | sim | kid dos links novos |
 | `IP_HMAC_KEY` | API | sim | segredo de 32 bytes |
-| `OCR_PROVIDER` | worker | sim | `google-vision` ou `fake` |
-| `GOOGLE_VISION_ENDPOINT` | worker | não | host da allowlist; padrão `https://vision.googleapis.com` |
-| `GOOGLE_SA_JSON` | worker | se `google-vision` | credencial da conta de serviço (segredo) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | API, worker | não | telemetria |
-| `LOG_LEVEL` | API, worker | não | padrão `info` |
+| `CRON_SECRET` | API | sim | segredo dos endpoints `/api/cron/*`, compartilhado com o cron-job.org (segredo) |
+| `OCR_PROVIDER` | API | sim | `google-vision` ou `fake` |
+| `GOOGLE_VISION_ENDPOINT` | API | não | host da allowlist; padrão `https://vision.googleapis.com` |
+| `GOOGLE_SA_JSON` | API | se `google-vision` | credencial da conta de serviço (segredo) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | API | não | telemetria |
+| `LOG_LEVEL` | API | não | padrão `info` |
 
 A inicialização valida todas as variáveis com zod e encerra o processo se faltar alguma obrigatória, sem imprimir os valores.
 

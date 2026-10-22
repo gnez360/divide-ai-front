@@ -2,16 +2,18 @@
 
 | Campo | Valor |
 |---|---|
-| Versão | 1.0 |
-| Data | 09/10/2026 |
-| Base | `spec.md` v2.0 (funcional) e `spec_tecnica.md` v1.0 (técnica) |
+| Versão | 2.0 |
+| Data | 22/10/2026 |
+| Base | `spec.md` v2.0 (funcional) e `spec_tecnica.md` v2.0 (técnica) |
 | Escopo | engenharia, design, produto e operação, de M0 (fundamentos) até M6 (beta fechado) |
+
+**v2.0 (22/10/2026):** rework para a plataforma fechada da ADR-14 (Vercel + Supabase free, sem worker nem pg-boss): SPK-02 redefinida para SSE serverless, SPK-03 e DB-04 removidas, tasks de WRK viraram OCR-em-`after()` (API-28) e endpoints de cron (API-29), INF-02 a INF-05 reescritas para a Vercel, e OPS-02 nova (guardas do free tier).
 
 **Como ler.** `§F5.8` aponta para `spec.md`; `§7.1` aponta para `spec_tecnica.md`; `CA-D8` é um critério de aceite do capítulo 11 de `spec.md`. Cada linha das tabelas é uma task do tamanho de um pull request (ou de uma entrega de design ou produto) e pode virar uma issue com o ID no título, a área e o marco como rótulos.
 
 **Tamanho** (estimativa relativa, uma pessoa): **P** até 1 dia · **M** 2 a 3 dias · **G** 4 a 5 dias · **-** fora de engenharia. Nenhuma task passa de G: o que passaria foi dividido. Recalibrar ao fim de M0.
 
-**Áreas:** PRD produto e jurídico · DES design · DOC documentação · SPK spike · FND fundação do repositório · CTR `@cj/contracts` · DB banco · CORE `@cj/core` · OCR `packages/ocr` · API `apps/api` · WRK `apps/worker` · WEB `apps/web` · INF infraestrutura · OBS observabilidade · QA testes transversais · OPS operação.
+**Áreas:** PRD produto e jurídico · DES design · DOC documentação · SPK spike · FND fundação do repositório · CTR `@cj/contracts` · DB banco · CORE `@cj/core` · OCR `packages/ocr` · API `apps/api` · WEB `apps/web` · INF infraestrutura · OBS observabilidade · QA testes transversais · OPS operação.
 
 ---
 
@@ -31,14 +33,14 @@
 
 | Marco | Foco | Critério de saída (CAs que ficam verificáveis no marco; detalhe na seção 12) | Tasks | Esforço de engenharia (pessoa-dia) |
 |---|---|---|---:|---:|
-| M0 Fundamentos | repositório, CI, `@cj/core` (cálculo e derivação), banco, Supabase, OCR (spike), plataforma (spike) | CA-A5, CA-C8, CA-D2, CA-D3, CA-D4, CA-D7, CA-D8, CA-D13, CA-D14, §F11.J; ADRs de SPK-01, SPK-02 e SPK-03 | 38 | 72 |
-| M1 Criação e tempo real base | motor de comandos, pipeline, criação, imagem, OCR assíncrono, SSE e fan-out, telas 01 a 10, staging | CA-A1, CA-A2, CA-A3, CA-A6, CA-A7, CA-A8, CA-A9, CA-A10, CA-D5, CA-G5, CA-G6, CA-G7, CA-G8, CA-H3, CA-H7 | 54 | 113,5 |
-| M2 Entrada e identidade | `joinToken`, entrada, vagas, pré-cadastro, reivindicação, remoção, revogação, telas 11 a 13 e parte da 28 | CA-A11, CA-B1 a CA-B5, CA-B7 a CA-B11, CA-G3, CA-G4, CA-H5 | 20 | 37,5 |
-| M3 Divisão, presença e offline | `SET_SPLIT`, edição de item dividido, presença, conflito, offline, PWA, telas 14 a 21 | CA-C1 a CA-C7, CA-C9, CA-G1, CA-G2, CA-G9, CA-H11 | 21 | 38 |
+| M0 Fundamentos | repositório, CI, `@cj/core` (cálculo e derivação), banco, Supabase, OCR (spike), plataforma (spike) | CA-A5, CA-C8, CA-D2, CA-D3, CA-D4, CA-D7, CA-D8, CA-D13, CA-D14, §F11.J; ADRs de SPK-01 e SPK-02 | 36 | 70 |
+| M1 Criação e tempo real base | motor de comandos, pipeline, criação, imagem, OCR em `after()`, cron endpoints, SSE e fan-out, telas 01 a 10, staging | CA-A1, CA-A2, CA-A3, CA-A6, CA-A7, CA-A8, CA-A9, CA-A10, CA-D5, CA-G5, CA-G6, CA-G7, CA-G8, CA-H3, CA-H7 | 53 | 114 |
+| M2 Entrada e identidade | `joinToken`, entrada, vagas, pré-cadastro, reivindicação, remoção, revogação, telas 11 a 13 e parte da 28 | CA-A11, CA-B1 a CA-B5, CA-B7 a CA-B11, CA-G3, CA-G4, CA-H5 | 19 | 36,5 |
+| M3 Divisão, presença e offline | `SET_SPLIT`, edição de item dividido, presença, conflito, offline, PWA, telas 14 a 21 | CA-C1 a CA-C7, CA-C9, CA-G1, CA-G2, CA-G9, CA-H11 | 20 | 37 |
 | M4 Confirmação e fechamento | consumo, resolução em nome, ajustes da mesa, aviso de reabertura, fechamento, telas 22 a 27 | CA-A4, CA-B6, CA-B12, CA-D1, CA-D6, CA-D9 a CA-D12, CA-E1 a CA-E8, CA-F1 a CA-F8, CA-H4 | 15 | 30 |
-| M5 Privacidade e operação | tela 28 completa, exclusão, anonimização, purgas, limites, observabilidade, produção, segurança, carga, acessibilidade | CA-H1, CA-H2, CA-H6, CA-H8, CA-H9, CA-H10, §F11.I, carga (§17.6), meta do OCR (§9.6) | 27 | 41 |
+| M5 Privacidade e operação | tela 28 completa, exclusão, anonimização, purgas, limites, observabilidade, produção, segurança, carga, acessibilidade, guardas do free tier | CA-H1, CA-H2, CA-H6, CA-H8, CA-H9, CA-H10, §F11.I, carga (§17.6), meta do OCR (§9.6) | 25 | 39 |
 | M6 Beta fechado | uso real com grupos convidados | métricas de §15.3 sem bloqueadores | 3 | 2,5 |
-| **Total** | | | **178** | **334,5** |
+| **Total** | | | **171** | **329** |
 
 O esforço é a soma das tasks de engenharia (P = 1, M = 2,5, G = 4,5), sem paralelismo e sem as tasks de design e produto. Serve para comparar marcos, não como prazo.
 
@@ -51,7 +53,7 @@ A ordem de §18 tem dependências invertidas. Esta decomposição corrige a sequ
 | # | §18 diz | Esta decomposição | Motivo |
 |---|---|---|---|
 | 1 | SSE, fan-out e sincronização em M3 | M1 (API-15, API-16, WEB-05, WEB-07) | a tela 04 (M1) espera o evento com o resultado do OCR; os banners de CA-A6, CA-A11, CA-B7, CA-B9 e CA-B11 dependem do tempo real |
-| 2 | spike de SSE e plataforma antes de M3 | M0 (SPK-02) | o deploy de staging (INF-03) e o SSE de M1 dependem da plataforma escolhida (A1) |
+| 2 | spike de SSE e plataforma antes de M3 | M0 (SPK-02) | a plataforma está fechada (ADR-14); o spike valida o SSE serverless (RT2) e o `LISTEN` (RT3) antes do deploy de staging (INF-03) e do tempo real de M1 |
 | 3 | tela 28 inteira em M5 | editar perfil, sair e apagar e rotacionar link em M2 (WEB-24); anonimizar e excluir em M5 (WEB-50) | CA-B8 (sair e voltar) e CA-B11 (rotação) são critérios de saída de M2 |
 | 4 | pacote de OCR em M1 | M0, junto com o spike (OCR-01 a OCR-05) | o spike precisa do parser e do adapter reais para medir a qualidade; o protótipo vira o código |
 | 5 | teste da CSP em `Report-Only` em M0 | M1 (INF-06) | só faz sentido com os componentes Radix e vaul montados |
@@ -70,7 +72,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | L3 | `POST /api/bills/:billId/editing` (§6.2) não tem onde guardar o item em edição: `app.presence` não tem coluna para isso e a requisição pode chegar a uma instância diferente da que mantém o stream | colunas `editing_item_id` e `editing_expires_at` em `app.presence`, distribuídas por `NOTIFY presence` | DB-02, API-25 |
 | L4 | §6.4 diz que `GET /api/bills/:billId/invite` só responde com a conta `OPEN`, mas a tela 27 tem [Copiar link] e §F5.2 diz que o link continua abrindo o resumo depois de finalizar | responder também com a conta `CLOSED` | API-18, WEB-48 |
 | L5 | §8.4 lista os canais de `LISTEN` sem `bill_deleted`, que §7.5 usa | incluir `bill_deleted` na lista | API-16 |
-| L6 | o job `product-metrics` "grava" métricas (§14), mas §5.2 não tem tabela para elas | publicar como métricas OpenTelemetry (gauges), sem tabela nova | WRK-10 |
+| L6 | §14 publica as métricas de produto (§15.3), mas §5.2 não tem tabela para elas | publicar como métricas OpenTelemetry (gauges) no endpoint de cron `product-metrics`, sem tabela nova | OBS-05 |
 | L7 | `DECIDE_CLAIM` não pode vir da sessão que pediu (§F5.3.4), mas o pedido é feito por um visitante e nada liga o pedido a uma sessão | guardar `requester_session_id` (opcional) em `app.claim_secrets` quando o pedido vier de um navegador que já tem sessão na conta; a API recusa a decisão dessa sessão com 403. Continua sendo mitigação parcial (RA3) | DB-02, API-20 |
 | L8 | nome impróprio ou texto com caractere de controle não tem código em §4.4, e 400 é tratado como erro de programa (§F8.9), sem mensagem para a pessoa | validar no cliente com o mesmo schema; no servidor, 422 `INVALID_TEXT` com mensagem do catálogo | CTR-01, CTR-03 |
 
@@ -93,19 +95,18 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
 | SPK-01 | **Qualidade do OCR (RT1).** Rodar OCR-03 e OCR-04 sobre o corpus com OCR-05 e comparar com a meta provisória de §9.6 (total exato ≥ 80%, F1 de itens ≥ 0,8). Abaixo da meta, medir um adapter alternativo (Document AI ou modelo multimodal). | PRD-01, OCR-03, OCR-04, OCR-05 | relatório por versão do parser e ADR com a decisão do provedor | M |
-| SPK-02 | **Plataforma e tempo real (RT2, RT3, A1).** Escolher plataforma de containers e CDN que atendam §16.2 e §16.3. Provar com protótipo: SSE de 10 min sem buffer nem compressão, timeout ocioso ≥ 120 s, `LISTEN` estável via Supavisor em modo sessão ou conexão direta, `NOTIFY` entre duas instâncias, encerramento gracioso. Registrar o plano B (WebSocket, Redis pub/sub). | INF-01 | ADR com o fornecedor e as medições (latência commit → evento) | G |
-| SPK-03 | **Conferência de bibliotecas** (§5.2, §14). Nas versões adotadas: `send` do pg-boss com a opção `db` dentro de uma transação do `pg` (rollback desfaz o job); `migrate: false` e filas criadas por SQL; opção `tableCreated` do rate-limiter-flexible. Sem a opção `db`, adotar o outbox `app.side_effects` de §14. | FND-01 | teste automatizado do rollback desfazendo o job, ou decisão pelo outbox registrada | P |
+| SPK-02 | **Tempo real e background na Vercel (RT2, RT3).** Provar com protótipo: SSE com corte no `maxDuration` e reconexão sem perda (hello + snapshot, §8.2); streaming sem buffer; `LISTEN` estável via Supavisor em modo sessão; `NOTIFY` entre duas instâncias da função; `after()` sustentando o OCR de 18 s após a resposta. Registrar o plano B (WebSocket, Redis pub/sub). | INF-01 | ADR com as medições (latência commit → evento, comportamento da reconexão) | G |
 
 ### 5.3 Repositório e CI
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
-| FND-01 | **Monorepo** (§3.2). pnpm workspaces com `apps/web`, `apps/api`, `apps/worker`, `packages/core`, `packages/contracts`, `packages/ocr`, `db/`, `infra/`, `docs/`; `tsconfig` base com `strict`, `noUncheckedIndexedAccess` e `exactOptionalPropertyTypes`; Node 24 fixado (`engines`, `.nvmrc`); specs em `docs/`. | nenhuma | `pnpm install` e `pnpm -r build` passam em máquina limpa | P |
+| FND-01 | **Monorepo** (§3.2). pnpm workspaces com `apps/web`, `apps/api`, `packages/core`, `packages/contracts`, `packages/ocr`, `db/`, `infra/`, `docs/`; `tsconfig` base com `strict`, `noUncheckedIndexedAccess` e `exactOptionalPropertyTypes`; Node 24 fixado (`engines`, `.nvmrc`); specs em `docs/`. | nenhuma | `pnpm install` e `pnpm -r build` passam em máquina limpa | P |
 | FND-02 | **Lint e formatação** (§3.3). ESLint `typescript-eslint` estrito (`no-explicit-any`, `no-floating-promises`, `switch-exhaustiveness-check`, `react/no-danger`, proibição de `Math.random` e `eval`); fronteiras de importação de §3.2; Prettier; commitlint. | FND-01 | importar `apps/api` em `core` ou usar `Math.random` falha no lint | P |
 | FND-03 | **CI de pull request, fase 1** (§16.4). Install com lockfile, lint, typecheck, testes unitários, build, `pnpm audit` (falha em alta ou crítica), gitleaks, CodeQL, limites de cobertura. Integração e E2E entram em QA-01 e QA-02. | FND-02 | PR com vulnerabilidade alta, segredo de teste ou cobertura abaixo do limite fica vermelho | M |
 | FND-04 | **Atualização de dependências** (§12.8). Renovate ou Dependabot, com sharp e libvips em atualização mensal. | FND-01 | primeiro PR automático aberto | P |
-| FND-05 | **Ambiente local** (§16.1). Supabase CLI (`supabase start`), compose com API, worker e web, `.env.example` sem segredos reais, scripts `pnpm dev`, `pnpm db:migrate` e `pnpm db:reset`. | FND-01, DB-01 | pessoa nova sobe o ambiente seguindo só o README | M |
-| FND-06 | **Configuração validada** (Apêndice B). Variáveis lidas com zod na API e no worker; o processo encerra se faltar uma obrigatória, sem imprimir valores. | FND-01 | teste: sem `JOIN_TOKEN_KEYS`, o processo encerra com mensagem que não contém valores | P |
+| FND-05 | **Ambiente local** (§16.1). Supabase CLI (`supabase start`), compose com API e web, `.env.example` sem segredos reais, scripts `pnpm dev`, `pnpm db:migrate` e `pnpm db:reset`. | FND-01, DB-01 | pessoa nova sobe o ambiente seguindo só o README | M |
+| FND-06 | **Configuração validada** (Apêndice B). Variáveis lidas com zod na API (inclusive `CRON_SECRET`); o processo encerra se faltar uma obrigatória, sem imprimir valores. | FND-01 | teste: sem `JOIN_TOKEN_KEYS`, o processo encerra com mensagem que não contém valores | P |
 
 ### 5.4 Contratos e banco
 
@@ -115,8 +116,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | CTR-02 | **Catálogo de textos pt-BR** (L1). Catálogo com chaves em inglês em `@cj/contracts`, mapa `ErrorCode` → mensagem para a API, regra de lint contra texto literal em JSX. | CTR-01, DOC-01 | nenhum texto pt-BR fora do catálogo (verificado no lint) | P |
 | DB-01 | **Drizzle e migrações** (§5.4). Drizzle ORM com `pg`; drizzle-kit gerando SQL em `db/migrations`; fluxo gerar, revisar e aplicar com `app_owner`; regra de expandir e contrair. | FND-01 | migração vazia aplicada no Supabase local | P |
 | DB-02 | **Migração inicial do schema `app`** (§5.2). Tabelas, constraints e índices de `bills`, `sessions`, `claim_secrets`, `operations`, `entry_operations`, `events`, `presence` e `audit_log`, com os ajustes de L3 e L7. | DB-01, DOC-01 | teste de integração: `document_size` e os `check` de estado rejeitam valores inválidos | M |
-| DB-03 | **Papéis, grants e RLS** (§5.3). `app_owner` e `app_runtime` (privilégio mínimo, sem `public`, `auth` e `storage`); RLS em todas as tabelas de `app` com política só para `app_runtime`; nenhum grant para `anon` e `authenticated`; `statement_timeout = 5s` e `idle_in_transaction_session_timeout = 10s` no papel. | DB-02 | teste: `anon` e `authenticated` não leem nenhuma tabela de `app`; `app_runtime` não cria tabela | M |
-| DB-04 | **pg-boss e rate limiter nas migrações** (§5.2, §14). Schema `pgboss` e filas de §14 criados na migração; tabela do rate-limiter-flexible criada na migração; em runtime, criação automática desligada com as opções confirmadas em SPK-03. | DB-02, SPK-03 | API e worker sobem com `app_runtime` sem criar objetos | P |
+| DB-03 | **Papéis, grants, RLS e rate limiter** (§5.2, §5.3). `app_owner` e `app_runtime` (privilégio mínimo, sem `public`, `auth` e `storage`); RLS em todas as tabelas de `app` com política só para `app_runtime`; nenhum grant para `anon` e `authenticated`; `statement_timeout = 5s` e `idle_in_transaction_session_timeout = 10s` no papel; tabela do rate-limiter-flexible criada na migração (opção `tableCreated` confirmada na versão adotada). | DB-02 | teste: `anon` e `authenticated` não leem nenhuma tabela de `app`; `app_runtime` não cria tabela | M |
 | INF-01 | **Supabase de staging** (§5.3, §16.1). Projeto em São Paulo; schema `app` fora de "Exposed schemas"; API de dados desativada se nada a usar; bucket privado `receipts`; papéis de DB-03; Supavisor em modo sessão. | DB-03 | migrações aplicadas em staging; requisição anônima à API de dados não vê `app` | M |
 
 ### 5.5 `@cj/core`: cálculo e derivação
@@ -167,30 +167,28 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
 | API-01 | **Servidor HTTP** (§6.1, §6.7, §15.1). Express 5; JSON até 256 KB; `Cache-Control: no-store`; handler global de problem+json sem stack nem mensagem do banco; corpo 404 único; `trust proxy` igual a `TRUST_PROXY_HOPS`; `/api/health` e `/api/ready`; pino-http com a redação de §15.1; encerramento gracioso (drena por até 10 s). | FND-06, CTR-01 | erro interno não vaza detalhe; a redação remove cookie e `Set-Cookie`; `ready` falha sem banco | M |
-| API-02 | **CSRF e tipo de conteúdo** (§12.5). Métodos diferentes de `GET` e `HEAD` exigem `Origin` igual a `APP_ORIGIN` (sem `Origin`, só `Sec-Fetch-Site: same-origin`); JSON exige `application/json`; imagem exige `multipart/form-data`. | API-01 | `Origin` de terceiro → 403; sem `Origin` e sem `Sec-Fetch-Site` → 403 | P |
+| API-02 | **CSRF e tipo de conteúdo** (§12.5). Métodos diferentes de `GET` e `HEAD` exigem `Origin` igual a `APP_ORIGIN` (sem `Origin`, só `Sec-Fetch-Site: same-origin`); endpoints JSON (inclusive `upload-url` e `/image`) exigem `application/json`. | API-01 | `Origin` de terceiro → 403; sem `Origin` e sem `Sec-Fetch-Site` → 403 | P |
 | API-03 | **Acesso ao banco** (§5.3, §7.3). Pool (Supavisor em modo sessão, `DB_POOL_MAX`); helper de transação com `SET LOCAL lock_timeout = '3s'`; `lock_timeout` → 503 `BUSY`; erros do driver logados por código estável; nenhum SQL por concatenação. | API-01, DB-03 | duas transações na mesma linha: a segunda recebe `BUSY` após 3 s | P |
 | API-04 | **Sessões e autorização** (§11.2, §11.4). Valor de 32 bytes, hash SHA-256, cookie `__Host-cj_<billId sem hífens>` com `HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`; renovação (`last_used_at` a cada 5 min; `expires_at` e `Set-Cookie` uma vez por dia); `authorizeBill`: UUID inválido ou sem cookie → 404, sessão revogada ou expirada → 401 `SESSION_INVALID` ou `ACCESS_TRANSFERRED`; ator só da sessão. | API-03 | atributos do cookie conferidos; sessão da conta A não serve para B (CA-H3) | M |
-| API-05 | **Pipeline de comandos** (§7.1 a §7.3) e `POST /api/bills/:billId/commands`. Passos 1 a 14: lock antes da idempotência, `migrateDocument`, `execute`, erro gravado em `operations` com `serverState`, `noChange`, validação do documento inteiro, `UPDATE` com colunas extraídas, efeitos transacionais (revogar sessões, `join_token_version`, jobs na transação), `events`, `audit_log`, `operations` sem snapshot, `pg_notify`; `InvariantError` → ROLLBACK e 500 com o snapshot anterior. | API-04, API-08, CORE-13, SPK-03 | CA-G5; repetir um comando rejeitado devolve a mesma rejeição; rollback não deixa evento nem job; `Promise.all` na mesma conta serializa | G |
+| API-05 | **Pipeline de comandos** (§7.1 a §7.3) e `POST /api/bills/:billId/commands`. Passos 1 a 14: lock antes da idempotência, `migrateDocument`, `execute`, erro gravado em `operations` com `serverState`, `noChange`, validação do documento inteiro, `UPDATE` com colunas extraídas, efeitos transacionais (revogar sessões, `join_token_version`), efeitos pós-commit (delete-image), `events`, `audit_log`, `operations` sem snapshot, `pg_notify`; `InvariantError` → ROLLBACK e 500 com o snapshot anterior. | API-04, API-08, CORE-13 | CA-G5; repetir um comando rejeitado devolve a mesma rejeição; rollback não deixa evento; `Promise.all` na mesma conta serializa | G |
 | API-06 | **Snapshot e leitura** (§6.5) `GET /api/bills/:billId`. `BillSnapshot` sem segredos, com `me`, `hasImage` e presença (vazia até API-24). | API-05 | o snapshot nunca contém token, hash ou caminho da imagem | P |
-| API-07 | **Comandos de sistema** (§7.1). Executor compartilhado com o worker: ator `SYSTEM`, `operationId` UUID v5 de `"<type>:<id>"` em namespace fixo, passos 5 a 13 do pipeline. | API-05 | o mesmo job executado duas vezes produz uma única revisão | P |
+| API-07 | **Comandos de sistema** (§7.1). Executor compartilhado por OCR e crons (API-28 e API-29): ator `SYSTEM`, `operationId` UUID v5 de `"<type>:<id>"` em namespace fixo, passos 5 a 13 do pipeline. | API-05 | o mesmo comando de sistema executado duas vezes produz uma única revisão | P |
 | API-08 | **Auditoria** (§12.9, §F9.4.9). Catálogo de ações (criação, confirmação da comanda, total impresso, ajuste de divergência, ajuste de conciliação, dispensas, resoluções em nome, vínculo de vaga, reivindicações e decisões, remoções, exclusão de item, fechamento, rotação, anonimização, exclusão da conta); `ip_hmac` com `IP_HMAC_KEY`; `data` só com IDs, códigos e centavos. | API-03 | nenhum registro contém nome ou descrição | P |
-| API-09 | **Rate limit** (§12.7). rate-limiter-flexible com store Postgres; chaves `HMAC(IP)` ou ID da sessão; 429 com `Retry-After`; limites de criação (10/h por IP) e de comandos (120/min por sessão). Os limites de entrada, reivindicação e upload entram nas tasks dessas rotas. | API-03, DB-04 | 11ª criação na mesma hora → 429 com `Retry-After` | M |
+| API-09 | **Rate limit** (§12.7). rate-limiter-flexible com store Postgres; chaves `HMAC(IP)` (com `trust proxy` ativo) ou ID da sessão; 429 com `Retry-After`; limites de criação (10/h por IP) e de comandos (120/min por sessão). Os limites de entrada, reivindicação e upload entram nas tasks dessas rotas. | API-03, DB-03 | 11ª criação na mesma hora → 429 com `Retry-After` | M |
 | API-10 | **Criação da conta** (§7.4) `POST /api/bills`. `pg_advisory_xact_lock` pelo hash do `operationId`; idempotência em `entry_operations`; conta `DRAFT`, criador `ACTIVE` e sessão na mesma transação; sessão adicional na repetição (máximo 3 por `operationId`); auditoria. Inclui a função de criação do documento no core. | API-04, API-08, API-09, CTR-03 | duas criações simultâneas com o mesmo `operationId` → uma conta; resposta gravada sem o valor do cookie | M |
 | API-11 | **Adapter de Storage** (§10.4). Supabase Storage com a chave de serviço só no servidor: upload, download em stream, remoção idempotente (objeto inexistente é sucesso), listagem para a varredura. | FND-06, INF-01 | testes contra o Storage local | P |
-| API-12 | **Processamento de imagem** (§10.2, §10.3). multer em memória (10 MB, 1 arquivo); `file-type` com allowlist; HEIC com dimensões lidas no cabeçalho (≤ 40 MP) e conversão em `worker_thread` com `resourceLimits` e timeout de 5 s; sharp com `limitInputPixels` e `failOn: 'error'`; `rotate`, `resize` 2400 e JPEG 85 mozjpeg, sem metadados. | API-01 | CA-H7 (tipo falso, mais de 10 MB, GPS removido); bomba de descompressão rejeitada | M |
-| API-13 | **Upload e início do OCR** (§9.5, §10.4) `POST /api/bills/:billId/image`. Só o criador, conta `DRAFT`; idempotência antes do Storage; chave `bills/<billId>/<uuid>.jpg`; `START_OCR` no pipeline com `ocr` e `ocr-expire` na mesma transação; compensação apagando o objeto se o comando falhar; 10/min e 30/dia por conta; 202. | API-05, API-11, API-12, CORE-14 | CA-A8 em integração com `FakeExtractor` atrasado; falha do comando não deixa objeto | M |
+| API-12 | **Processamento de imagem** (§10.2, §10.3). Validação do objeto no Storage em `POST /image`: `HEAD` + tamanho ≤ 10 MB; `file-type` com allowlist; HEIC com dimensões lidas no cabeçalho (≤ 40 MP) e conversão em `worker_thread` com `resourceLimits` e timeout de 5 s; sharp com `limitInputPixels` e `failOn: 'error'`; `rotate`, `resize` 2400 e JPEG 85 mozjpeg, sem metadados. | API-01, API-11 | CA-H7 (tipo falso, mais de 10 MB, GPS removido); bomba de descompressão rejeitada | M |
+| API-13 | **Upload assinado e início do OCR** (§9.5, §10.1, §10.4) `POST /api/bills/:billId/image/upload-url` e `POST /api/bills/:billId/image`. Só o criador, conta `DRAFT`; URL assinada de uso único (PUT, ~5 min, tipo fixado na assinatura, ≤ 10 MB); chave `bills/<billId>/<uuid>.jpg`; `POST /image` valida o objeto, roda `START_OCR` no pipeline e compensa apagando o objeto se o comando falhar; 10/min e 30/dia por conta; 202 `{attemptId}`. | API-05, API-11, API-12, CORE-14 | CA-A8 em integração; falha do comando não deixa objeto; `PUT` sem `POST /image` é coberto pelo sweep | M |
 | API-14 | **Entrega da imagem** (§10.5) `GET /api/bills/:billId/image`. Sessão obrigatória, streaming, `Content-Type: image/jpeg`, `Cache-Control: private, no-store`, `Content-Disposition: inline`. | API-04, API-11 | sem sessão → 404 (CA-H7) | P |
 | API-15 | **SSE** (§8.1 a §8.3, §8.7) `GET /api/bills/:billId/events`. Registra o stream antes de ler a revisão e enviar `hello`; `retry: 3000`; `ping` a cada 15 s; mapas por conta e por sessão; 3 streams por sessão (o mais antigo é encerrado) e 10.000 por instância; `SIGTERM` com `retry: 1000`. | API-04, SPK-02 | CA-G8 (commit entre o snapshot e a assinatura) | M |
 | API-16 | **Fan-out entre instâncias** (§8.4, L5). Conexão dedicada (`DATABASE_LISTEN_URL`) com `LISTEN` em `bill_events`, `session_revoked`, `presence` e `bill_deleted`; leitura única de `app.events` por instância; reconexão com backoff, `not ready` enquanto caída, revalidação de sessões e contas e novo `hello` ao voltar; métrica `event_fanout_ms`. | API-15 | teste com duas instâncias: o evento chega nas duas; queda do `LISTEN` revalida e reenvia `hello` | G |
 
-### 6.3 Worker
+### 6.3 OCR em background e crons
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
-| WRK-01 | **Worker** (§14). pg-boss com `migrate: false`, registro das filas, concorrência (4 jobs `ocr` por instância), encerramento gracioso, configuração (FND-06) e logs. | FND-06, DB-04, API-07 | o worker sobe com `app_runtime` e processa um job de teste | M |
-| WRK-02 | **Job `ocr`** (§9.5). Baixa a imagem, chama o `ReceiptExtractor` de `OCR_PROVIDER` com orçamento de 18 s, executa `APPLY_OCR_RESULT` ou `FAIL_OCR` como comando de sistema; log `ocr_result_discarded` e métrica quando descartado. | WRK-01, CORE-15, OCR-02, OCR-04 | CA-A8 em integração; falha do provedor → `OCR_FAILED` com o código | M |
-| WRK-03 | **Job `ocr-expire`** (§9.5). `EXPIRE_OCR_ATTEMPT` 25 s após o início; sem efeito se a tentativa não estiver `PROCESSING`. | WRK-01, CORE-14 | teste com relógio controlado | P |
-| WRK-04 | **Job `delete-image`** (§14). Remove o objeto (inexistente é sucesso), 5 tentativas com backoff; só enfileirado por efeito transacional. | WRK-01, API-11 | rollback do comando não apaga a imagem | P |
+| API-28 | **OCR em background** (§9.5). `after()` na invocação do `POST /image`: baixa a imagem, chama o `ReceiptExtractor` de `OCR_PROVIDER` com orçamento de 18 s (`AbortSignal`), executa `APPLY_OCR_RESULT` ou `FAIL_OCR` como comando de sistema; timer de 25 s para `EXPIRE_OCR_ATTEMPT`; log `ocr_result_discarded` e métrica quando descartado; `ocr_inflight`. | API-13, CORE-15, OCR-02, OCR-04 | CA-A8 em integração; falha do provedor → `OCR_FAILED` com o código; invocação morta → sweep expira | M |
+| API-29 | **Efeitos pós-commit e endpoints de cron** (§10.4, §14). Framework `POST /api/cron/:job` com `Authorization: Bearer <CRON_SECRET>` (sem segredo → 404 idêntico); efeito `delete-image` com 5 tentativas e backoff; jobs: `ocr-sweep` (1/min), `purge-images` (1/h), `sweep-orphan-images` (diário), `purge-sessions` (diário), `purge-operations` (10 min), `purge-events` (1/min), `purge-presence` (1/min), `purge-audit-log` (diário), em lotes de 5.000 linhas onde couber. O `expire-claims` (§11.3) entra em M2, com CORE-20. | API-11, CORE-14 | rollback do comando não apaga a imagem referenciada; purgas com relógio controlado; sem segredo → 404 | M |
 
 ### 6.4 Web
 
@@ -205,8 +203,8 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | WEB-07 | **Banners** (§F4.8, §F8.6, §13.4). Gerados de `BillEvent.notifications`; pessoais só para o próprio `participantId`; agrupados por tipo; persistentes até "Ok"; ações ([Desfazer], [Aprovar], [Recusar]) delegadas às telas. | WEB-02, WEB-05 | nenhum toast por evento; dois eventos iguais viram um banner | M |
 | WEB-08 | **Tela 01 Home e identificação** (§F4.2). Textos da home; [+ Nova conta] → "Como devemos te chamar?" (nome até 30 caracteres, avatar) → `POST /api/bills` → 02. [Entrar em uma conta] em WEB-21; [Como funciona?] em WEB-51. | WEB-02, WEB-04, API-10 | E2E: criar a conta leva a 02 com sessão emitida | P |
 | WEB-09 | **Telas 02 e 03 captura e prévia** (§10.1, §F4.2). `input capture="environment"` como caminho principal; visor `getUserMedia` com moldura e lanterna só se suportada; [Galeria]; [Digitar manualmente] (`ENTER_MANUALLY` → 06 vazia); câmera negada com instrução, galeria e digitação; prévia com [Usar esta foto] e [Tirar novamente]; selo de nitidez opcional (§F4.2 diz "quando disponível"). | WEB-02, DES-03, CORE-14 | CA-A2 em E2E; câmera negada mantém galeria e digitação | M |
-| WEB-10 | **Compressão e envio da foto** (§10.1). `createImageBitmap` com orientação; lado maior ≤ 2.400 px; JPEG 0,85 (0,7 acima de 4 MB); original até 10 MB quando o navegador não decodifica (HEIC); multipart com `operationId`; falha de envio → nova tentativa com o mesmo `operationId` ou digitação manual, sem perder dados (§F11.I). | WEB-09, API-13 | foto de 12 MP sai com até 4 MB; o reenvio não cria segunda tentativa | M |
-| WEB-11 | **Telas 04 e 05 OCR** (§9.5, §9.4, §F4.2). Miniatura; checklist ligado ao tempo ("Imagem recebida" só depois do 202; nada concluído antes do evento); [Cancelar leitura] → `CANCEL_OCR` → 02; 20 s sem resultado → `ABANDON_OCR` → 05; tela 05 com código e mensagem de §9.4, [Tentar de novo] (`RETRY_OCR`), [Tirar outra foto] (`TAKE_NEW_PHOTO`) e [Digitar manualmente]. | WEB-05, WEB-10, WRK-02, WRK-03 | CA-A1 e CA-A8 em E2E com `FakeExtractor` atrasado | M |
+| WEB-10 | **Compressão e envio da foto** (§10.1). `createImageBitmap` com orientação; lado maior ≤ 2.400 px; JPEG 0,85 (0,7 acima de 4 MB); original até 10 MB quando o navegador não decodifica (HEIC, tipo declarado); `upload-url` + `PUT` direto ao Storage + `POST /image` com o mesmo `operationId`; falha de envio → nova tentativa com o mesmo `operationId` ou digitação manual, sem perder dados (§F11.I). | WEB-09, API-13 | foto de 12 MP sai com até 4 MB; o reenvio não cria segunda tentativa | M |
+| WEB-11 | **Telas 04 e 05 OCR** (§9.5, §9.4, §F4.2). Miniatura; checklist ligado ao tempo ("Imagem recebida" só depois do 202; nada concluído antes do evento); [Cancelar leitura] → `CANCEL_OCR` → 02; 20 s sem resultado → `ABANDON_OCR` → 05; tela 05 com código e mensagem de §9.4, [Tentar de novo] (`RETRY_OCR`), [Tirar outra foto] (`TAKE_NEW_PHOTO`) e [Digitar manualmente]. | WEB-05, WEB-10, API-28 | CA-A1 e CA-A8 em E2E com `FakeExtractor` atrasado | M |
 | WEB-12 | **Tela 06: lista e confirmação** (§F4.2, §F5.6). Itens (`qtd × unitário` ou "total da linha"); [+ Adicionar item]; subtotal e subtotal lido pelo OCR (L2); bloco de cobranças → 08; Total impresso editável e obrigatório, com confirmação extra na conta `OPEN` (§F5.6.3); "⚠ N cobranças para conferir"; aviso a partir de 50 itens; [Confirmar comanda] → 08 destacada, 09 ou 10. | WEB-03, WEB-06, CORE-16, CORE-18 | roteamento de CA-A3; confirmação de CA-A11 antes de enviar | M |
 | WEB-13 | **Tela 06: mescla, excluídos, foto e descarte** (§F5.6.2, §F5.6.4). [Mesclar] quando houver par elegível; "Itens excluídos (N)" com [Restaurar] (só `OPEN`); [Ver foto], oculto sem imagem; voltar em `RECEIPT_REVIEW` com "Descartar a leitura e tirar outra foto?" → `DISCARD_RECEIPT` → 02. | WEB-12, CORE-17, API-14 | [Ver foto] oculto em CA-A2; restaurar pelo banner e pela seção | M |
 | WEB-14 | **Tela 07 Editar item** (§F4.2, §F7.2). Nome, quantidade (− / +), preço conforme `priceMode`, valor derivado, troca de modo no mesmo salvamento, "sem preço unitário exato", aviso ao mudar a quantidade em `LINE_TOTAL`, [Ver comanda original], [Excluir item] com "Isso remove R$ X de …" quando dividido, `REDUCTION_BLOCKED` perto do campo. | WEB-03, WEB-06, CORE-16, CORE-17 | CA-A7 em E2E | M |
@@ -220,12 +218,13 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 |---|---|---|---|---|
 | QA-01 | **Harness de integração** (§17.1, §17.3). Vitest, Supertest e Postgres real na versão do Supabase; migrações aplicadas; relógio controlável; Storage local; `FakeExtractor`; helpers para criar conta e sessões; etapa no CI. | FND-03, DB-03, OCR-02 | etapa de integração no CI rodando os testes de API-05 | M |
 | QA-02 | **Harness E2E** (§17.5). Playwright com vários contextos, compose local, `FakeExtractor`, axe-core em cada tela, helpers de viewport 320 px e zoom 200%; etapa no CI. | FND-05, QA-01 | primeiro E2E (criar conta) verde no CI | M |
-| INF-02 | **Imagem de container** (§16.2). Uma imagem para API e worker (`node:24-slim` ou distroless), usuário não-root, sistema de arquivos só leitura exceto `/tmp`, porta 8080, `--enable-source-maps`, SBOM. | FND-01 | a imagem roda os dois entrypoints localmente | M |
-| INF-03 | **Staging na plataforma** (§16.1, §16.2). API com ao menos 2 instâncias e worker com 1; segredos pelo gerenciador (§12.3); `DATABASE_LISTEN_URL`; Vision com cota baixa; autoescala por CPU e por streams. | SPK-02, INF-01, INF-02 | `/api/ready` verde nas duas instâncias | M |
-| INF-04 | **Borda de staging** (§16.3, §12.6). TLS; `/assets/*` imutável; `index.html` e `sw.js` sem cache; `/api/*` sem cache; rota de eventos sem buffer nem compressão, com timeout ocioso ≥ 120 s; IP do cliente em um único cabeçalho confiável; gzip e brotli; cabeçalhos de §12.6 com a CSP em `Report-Only`. | INF-03 | SSE de 10 min estável em staging; cabeçalhos presentes | M |
-| INF-05 | **Entrega contínua para staging** (§16.4). Em `main`: build da imagem e SBOM, migrações em job separado com `app_owner`, deploy e smoke tests. | INF-03, FND-03 | merge em `main` publica em staging sem passo manual | M |
+| INF-02 | **Projeto Vercel** (§16.2). Projeto conectado ao Git; `apps/web` como estático (build Vite) e `apps/api` como função Node que embrulha o Express (`maxDuration` 300, `gru1`); variáveis de ambiente por ambiente (Apêndice B); domínio de produção e previews por branch. | FND-01 | deploy de preview com `/api/health` verde | M |
+| INF-03 | **Staging** (§16.1, §16.2). Projeto Vercel de staging + projeto Supabase de staging (São Paulo); segredos pelo gerenciador da plataforma (§12.3); `DATABASE_LISTEN_URL`; Vision com cota baixa. | SPK-02, INF-01, INF-02 | `/api/ready` verde no staging | M |
+| INF-04 | **Borda de staging** (§16.3, §12.6). `vercel.json`: rewrite de `/api/*`, headers de §12.6 para o estático, `/assets/*` imutável, `index.html` e `sw.js` sem cache; Express aplicando os mesmos headers em `/api/*`; rota de eventos sem compressão; CSP em `Report-Only`. | INF-03 | SSE de 10 min com corte e reconexão estáveis no staging; cabeçalhos presentes | M |
+| INF-05 | **Entrega contínua** (§16.4). GitHub Actions (lint, typecheck, testes, build) + integração Git da Vercel; migração em job separado com `supabase db push` antes do promote; smoke tests; rollback documentado. | INF-03, FND-03 | merge em `main` publica preview; promote publica em staging sem passo manual | M |
 | INF-06 | **Decisão da CSP** (§12.6). Com Radix e vaul em uso, coletar violações em `Report-Only` e retirar `'unsafe-inline'` de `style-src` se nenhuma aparecer. | INF-04, WEB-02 | política final registrada em §12.6 | P |
-| OBS-01 | **Telemetria base** (§15.2, A2). OpenTelemetry com auto-instrumentação de Express, `pg` e `fetch`; exportador OTLP; amostragem de 10% e 100% em erros; escolha do fornecedor (A2). | API-01, WRK-01 | traces de um comando visíveis em staging | M |
+| INF-11 | **Cron-job.org** (§14). Conta free; jobs por ambiente (staging e produção) apontando para `/api/cron/*` com `CRON_SECRET`; configuração versionada em `infra/cron-jobs/` e aplicada via API do serviço; monitoramento: 3 falhas consecutivas de um job → alerta (OPS). | INF-03, API-29 | purgas e expirações rodando no staging por 1 semana sem falha | M |
+| OBS-01 | **Telemetria base** (§15.2, A2). OpenTelemetry com auto-instrumentação de Express, `pg` e `fetch`; exportador OTLP; amostragem de 10% e 100% em erros; escolha do fornecedor (A2). | API-01 | traces de um comando visíveis em staging | M |
 
 ### 6.6 Produto e design
 
@@ -246,7 +245,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | CORE-20 | **Reivindicações** (§F5.3.4, §11.3). `REQUEST_CLAIM` (alvo `ACTIVE` ou `SHARE_CLOSED`; 1 pendente por alvo e 3 por conta; `CLAIM_PENDING`); `DECIDE_CLAIM` (aprovar revoga as sessões do alvo com motivo `CLAIM` e notifica `ACCESS_TRANSFERRED`; recusar); `EXPIRE_CLAIM`; aceitos em `CLOSED`; decididas há mais de 24 h saem do documento. | CORE-13 | núcleo de CA-B7 e CA-B8 | M |
 | CORE-21 | **Rotação do link** (§F5.2). `ROTATE_INVITE_LINK`, só do criador, com efeito `join_token_version++` e notificação `INVITE_LINK_ROTATED`. | CORE-13 | núcleo de CA-B11; quem não é criador → 403 | P |
 
-### 7.2 API e worker
+### 7.2 API
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
@@ -257,7 +256,8 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | API-21 | **Conclusão da reivindicação** (§11.3). `GET /api/claims/:id` (cookie de pedido, 1/s) e `POST /api/claims/:id/complete` (só `APPROVED` com segredo não consumido → sessão do alvo, consome o segredo, apaga o cookie de pedido, 201). | API-20 | CA-B7 em integração: aprovação, recusa e expiração | M |
 | API-22 | **Revogação em tempo real** (§8.6). `NOTIFY session_revoked` em toda revogação (sair, reivindicação, remoção); `event: session` com o código; streams encerrados em até 5 s. | API-05, API-16 | CA-H5 em integração | P |
 | API-23 | **Sair e apagar** `POST /api/bills/:billId/session/end` (§11.2). Revoga com `SIGN_OUT` e devolve o cookie expirado. | API-22 | parte do servidor de CA-H11 | P |
-| WRK-05 | **Job `expire-claims`** (§11.3, §14). A cada minuto, `EXPIRE_CLAIM` nas pendentes com mais de 10 min. | WRK-01, CORE-20 | expiração de CA-B7 com relógio controlado | P |
+
+*(A expiração de reivindicações (`expire-claims`, §11.3) entra em M2, junto com CORE-20, usando o framework de cron de API-29.)*
 
 ### 7.3 Web
 
@@ -282,7 +282,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 
 ## 8. M3 Divisão, presença e offline
 
-### 8.1 `@cj/core`, API e worker
+### 8.1 `@cj/core` e API
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
@@ -290,7 +290,8 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | CORE-23 | **Edição de item dividido** (§F5.6.1, §F5.6.2). Tabela de §F5.6.1 (`REDUCTION_BLOCKED`, unidades sem dono, faltante, percentuais recalculados); exclusão com atribuições (regra 4); restauração (regra 1; atribuições de removidos não voltam, com aviso). | CORE-17, CORE-22 | núcleo de CA-C6, CA-C7 e CA-C9; uma linha de teste por linha de §F5.6.1 | M |
 | API-24 | **Presença** (§8.5). Upsert em `app.presence` ao abrir, a cada 15 s e ao fechar; online (até 45 s), recente (até 5 min), offline; `NOTIFY presence` agrupado (1/s por conta); `event: presence`; presença no `GET`. | API-16 | a presença nunca muda `revision`; dois aparelhos veem online e offline | M |
 | API-25 | **Presença de edição** `POST /api/bills/:billId/editing` (§6.2, L3). Corpo com `itemId` ou `null`; expira em 30 s sem renovação; distribuída pelo canal de presença; conta no limite de comandos. | API-24, DOC-01 | "Thais está editando este item" aparece e some em 30 s | P |
-| WRK-06 | **Limpeza das tabelas operacionais** (§5.5, §14). `purge-events` (5 min), `purge-operations` (24 h) e `purge-presence` (10 min), em lotes de 5.000 linhas. | WRK-01 | testes com relógio controlado | P |
+
+*(A limpeza das tabelas operacionais (`purge-events`, `purge-operations`, `purge-presence`, §5.5) entra em M1 com os demais crons, em API-29.)*
 
 ### 8.2 Web
 
@@ -356,17 +357,15 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 
 ## 10. M5 Privacidade e operação
 
-### 10.1 `@cj/core`, API e worker
+### 10.1 `@cj/core` e API
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
 | CORE-28 | **Anonimizar e excluir** (§F5.14). `ANONYMIZE_ME` ("Participante N" por `joinOrder`, avatar neutro, aceito em `CLOSED`, auditoria); validação de `DELETE_BILL` (criador e "EXCLUIR"). | CORE-13 | núcleo de CA-H9; quem não é criador → 403 | P |
-| API-26 | **Exclusão da conta** (§7.5). Transação própria: lock, `delete-image` enfileirado, auditoria da conta apagada e registro `BILL_DELETED` com `bill_ref`, sessões revogadas, `pg_notify('bill_deleted')`, `DELETE` em cascata, cookie expirado; cada instância envia `event: deleted` e encerra os streams. | API-05, API-16, CORE-28, WRK-04 | CA-H8 em integração; o link passa a 404 | M |
+| API-26 | **Exclusão da conta** (§7.5). Transação própria: lock, `delete-image` como efeito pós-commit com repetição, auditoria da conta apagada e registro `BILL_DELETED` com `bill_ref`, sessões revogadas, `pg_notify('bill_deleted')`, `DELETE` em cascata, cookie expirado; cada instância envia `event: deleted` e encerra os streams. | API-05, API-16, CORE-28, API-29 | CA-H8 em integração; o link passa a 404 | M |
 | API-27 | **Verificação dos limites** (§12.7). Testes de todos os limites da tabela de §12.7; métrica `rate_limit_blocked_total`. | API-09, API-13, API-19, API-20, API-21 | CA-H1: 1.000 tentativas não acham conta e recebem 429 depois do limite | P |
-| WRK-07 | **Job `purge-images`** (§10.6). A cada hora: contas com `closed_at` há mais de 48 h e `image_path` preenchido → apaga o objeto e anula `image_path`. | WRK-04 | CA-H10 com relógio controlado | P |
-| WRK-08 | **Job `sweep-orphan-images`** (§10.4). Diário: apaga objetos com mais de 1 h que não estão em nenhum `image_path`. | WRK-01, API-11 | objeto referenciado nunca é apagado | P |
-| WRK-09 | **Retenção de sessões e auditoria** (§5.5). `purge-sessions` (marca `EXPIRATION` e remove 7 dias depois) e `purge-audit-log` (90 dias). | WRK-01 | testes com relógio controlado | P |
-| WRK-10 | **Métricas de produto** (§15.3, L6). A cada 15 min: contas criadas, sem divisão e finalizadas; tempo entre confirmar a comanda e fechar; contas travadas; reivindicações pedidas, aprovadas e expiradas; remoções; sucesso do OCR; edições na tela 06 depois do OCR; sem dados pessoais. | WRK-01, OBS-01, DOC-01 | métricas visíveis em staging | M |
+
+*(Purgas de imagens e sweep: API-29, M1. Retenção de sessões e auditoria: também em API-29.)*
 
 ### 10.2 Web
 
@@ -381,13 +380,15 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
-| OBS-02 | **Métricas técnicas** (§15.2). Todas as métricas da tabela, com rótulos sem dados pessoais. | OBS-01, API-16, WRK-02 | painel de staging com as métricas | M |
+| OBS-02 | **Métricas técnicas** (§15.2). Todas as métricas da tabela (inclusive `cron_run_total` e `ocr_inflight`), com rótulos sem dados pessoais. | OBS-01, API-16, API-28 | painel de staging com as métricas | M |
 | OBS-03 | **Alertas** (§15.4). As oito condições, com severidade e destino. | OBS-02 | alerta de teste disparado em staging | P |
 | OBS-04 | **Rastreamento de erros** (A2). Ferramenta com limpeza de dados pessoais no navegador e no servidor. | OBS-01 | erro de teste chega sem cookie, token nem nome | P |
-| INF-07 | **Produção** (§16.1, §5.3). Supabase de produção em São Paulo, backup diário, segredos, plataforma e borda com o desenho de staging, domínio definitivo, Vision de produção com alerta de custo (RT6). | INF-05, PRD-03, PRD-04 | `/api/ready` verde em produção | M |
-| INF-08 | **Release para produção** (§16.4). Aprovação manual, migrações de produção em job separado, deploy gradual e smoke tests; procedimento de rollback documentado e ensaiado. | INF-07 | rollback ensaiado em staging | M |
+| OBS-05 | **Métricas de produto** (§15.3, L6). Cron `product-metrics` a cada 15 min publicando gauges OTel: contas criadas, sem divisão e finalizadas; tempo entre confirmar a comanda e fechar; contas travadas; reivindicações pedidas, aprovadas e expiradas; remoções; sucesso do OCR; edições na tela 06 depois do OCR; sem dados pessoais. | OBS-01, API-29, DOC-01 | métricas visíveis em staging | M |
+| INF-07 | **Produção** (§16.1, §5.3). Supabase de produção em São Paulo, plano free com as guardas de OPS-02, segredos, Vercel de produção e domínio definitivo, Vision de produção com alerta de custo (RT6). | INF-05, PRD-03, PRD-04 | `/api/ready` verde em produção | M |
+| INF-08 | **Release para produção** (§16.4). Aprovação manual (promote), migrações de produção com `supabase db push` antes do promote, smoke tests; procedimento de rollback documentado e ensaiado. | INF-07 | rollback ensaiado em staging | M |
 | INF-09 | **Cabeçalhos finais** (§12.6). CSP definitiva (INF-06) e demais cabeçalhos em staging e produção, com teste automatizado no smoke. | INF-06, INF-07 | `Referrer-Policy: no-referrer` e CSP conferidos (CA-H2) | P |
 | INF-10 | **Runbook de segredos** (§12.3, §11.1). Rotação a cada 90 dias; rotação de `JOIN_TOKEN_KEYS` sem invalidar links vigentes; resposta a vazamento. | INF-07 | runbook revisado | P |
+| OPS-02 | **Guardas do free tier** (§5.3, RT8). Monitoramento de banco e Storage com alerta a 80% do teto; pg_dump periódico documentado como plano B do backup; checklist de upgrade (Vercel Pro, Supabase Pro) com o preço. | INF-07 | alerta de teste a 80%; checklist revisado | P |
 
 ### 10.4 Testes e OCR
 
@@ -415,7 +416,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 | ID | Task | Depende de | Pronto quando | Tam |
 |---|---|---|---|---|
 | PRD-07 | **Beta fechado.** Recrutar grupos, canal de feedback e roteiro de observação de uso real. | INF-08 | grupos com acesso | - |
-| OPS-01 | **Operação do beta** (§15.3, §15.4). Painel com métricas de produto e técnicas, plantão para alertas altos, triagem semanal de bugs. | WRK-10, OBS-03 | métricas de §15.3 sem bloqueadores ao fim do beta | M |
+| OPS-01 | **Operação do beta** (§15.3, §15.4). Painel com métricas de produto e técnicas, plantão para alertas altos, triagem semanal de bugs. | OBS-05, OBS-03 | métricas de §15.3 sem bloqueadores ao fim do beta | M |
 | PRD-08 | **Revisão das decisões provisórias com dados.** D14 (limite de vagas), T11 (prazos), meta do OCR, RA9. | OPS-01 | decisões atualizadas em §F10 | - |
 
 ---
@@ -427,7 +428,7 @@ Propostas para decidir em DOC-01 antes das tasks afetadas.
 ```text
 FND-01 → CORE-01 → CORE-02 → CORE-03 → CORE-04 → CORE-05 → CORE-06 → CORE-07 → CORE-08 → CORE-09
   → CORE-13 → CORE-16 → CORE-17 → CORE-23 → CORE-24 → CORE-25 → WEB-44 → QA-04
-com API-01 → API-03 → API-04 → API-05 → API-13 → WRK-02 → WEB-11 fechando M1
+com API-01 → API-03 → API-04 → API-05 → API-13 → API-28 → WEB-11 fechando M1
 ```
 
 `CORE-06` (G), `CORE-13` (G) e `API-05` (G) são as três tasks mais arriscadas do caminho: começam assim que as dependências permitem e recebem revisão dobrada.
@@ -439,7 +440,7 @@ com API-01 → API-03 → API-04 → API-05 → API-13 → WRK-02 → WEB-11 fec
 | Domínio | CORE-01 | é o próprio caminho crítico |
 | API e banco | DB-01, API-01 | API-05 (precisa de CORE-13) |
 | Web | WEB-01 (só depende de FND-02 e CTR-02; pode começar no fim de M0) | WEB-06 (precisa de CORE-13) |
-| OCR | OCR-01 | WRK-02 |
+| OCR | OCR-01 | API-28 |
 | Plataforma | SPK-02, INF-01 | INF-03 e API-15 |
 | Design e produto | DES-01, PRD-01 | um marco antes de cada tela (DES-03 → M1, DES-04 → M2, DES-05 → M3, DES-06 → M4) |
 
@@ -458,7 +459,7 @@ com API-01 → API-03 → API-04 → API-05 → API-13 → WRK-02 → WEB-11 fec
 | CA-A5 | CORE-05, CORE-08 | M0 |
 | CA-A6 | CORE-18, API-08, WEB-07, WEB-16 | M1 |
 | CA-A7 | CORE-04, CORE-16, WEB-14 | M1 |
-| CA-A8 | CORE-14, CORE-15, API-13, WRK-02, WRK-03, WEB-11 | M1 |
+| CA-A8 | CORE-14, CORE-15, API-13, API-28, WEB-11 | M1 |
 | CA-A9 | CORE-09, CORE-16, OCR-01 | M1 |
 | CA-A10 | CORE-15, WEB-12, WEB-15 | M1 |
 | CA-A11 | CORE-16, API-08, WEB-07, WEB-12, WEB-19 | M2 (precisa de um segundo participante) |
@@ -468,7 +469,7 @@ com API-01 → API-03 → API-04 → API-05 → API-13 → WRK-02 → WEB-11 fec
 | CA-B4 | CORE-19, API-20, WEB-20 | M2 |
 | CA-B5 | CORE-19, API-20 | M2 |
 | CA-B6 | CORE-19, CORE-22, WEB-20, WEB-41 | M4 (vínculo em M2; tela 22 em M4) |
-| CA-B7 | CORE-20, API-20, API-21, API-22, WRK-05, WEB-20, WEB-23 | M2 |
+| CA-B7 | CORE-20, API-20, API-21, API-22, API-29, WEB-20, WEB-23 | M2 |
 | CA-B8 | CORE-20, API-23, WEB-24 | M2 |
 | CA-B9 | CORE-19, API-22, WEB-23 | M2 |
 | CA-B10 | CORE-19, WEB-19 | M2 |
@@ -529,9 +530,9 @@ com API-01 → API-03 → API-04 → API-05 → API-13 → WRK-02 → WEB-11 fec
 | CA-H5 | API-22, WEB-25 | M2 |
 | CA-H6 | WEB-48, QA-05 | M5 |
 | CA-H7 | API-12, API-14 | M1 |
-| CA-H8 | CORE-28, API-26, WRK-04, WEB-50 | M5 |
+| CA-H8 | CORE-28, API-26, API-29, WEB-50 | M5 |
 | CA-H9 | CORE-28, WEB-50 | M5 |
-| CA-H10 | WRK-07, API-14, WEB-13 | M5 |
+| CA-H10 | API-29, API-14, WEB-13 | M5 |
 | CA-H11 | API-23, WEB-24, WEB-37 | M3 |
 | §F11.I | WEB-03, WEB-09, WEB-10, QA-07 | M5 |
 | §F11.J | CORE-11 | M0 |
