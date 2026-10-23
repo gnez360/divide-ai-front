@@ -8,7 +8,7 @@ const BOUNDARY = (message) => ({ message });
 export default tseslint.config(
   {
     ignores: [
-      '**/node_modules/**',
+      '**/node_modules*/**',
       '**/dist/**',
       '**/coverage/**',
       'packages/api/var/**',
