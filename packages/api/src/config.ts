@@ -19,6 +19,8 @@ export interface Config {
   supabaseUrl: string;
   supabaseStorageKey: string;
   supabaseStorageBucket: string;
+  /** Saltos de proxy confiáveis para req.ip (§12.7): 1 na Vercel, 0 em dev. */
+  trustProxyHops: number;
   isProd: boolean;
 }
 
@@ -70,6 +72,7 @@ export function loadConfig(): Config {
     supabaseUrl: required('SUPABASE_URL', 'http://localhost:54321'),
     supabaseStorageKey: required('SUPABASE_STORAGE_KEY', 'dev-storage-key'),
     supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'receipts',
+    trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? (process.env.VERCEL ? 1 : 0)),
     isProd,
   };
 }

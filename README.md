@@ -130,6 +130,13 @@ Os testes da API sobem o próprio servidor em porta própria e não dependem do 
 - **Atualização:** com um build novo disponível, aparece o banner "Nova versão disponível" com [Atualizar] / [Depois]; [Atualizar] aplica o SW e recarrega.
 - **Ícones PNG** (192, 512, maskable 512, apple-touch 180): gerados por `node scripts/gen-icons.mjs` (sem dependências, replica o desenho de `public/icon.svg`).
 
+## Deploy (Vercel)
+
+- **Integração Git (sem CLI):** o repositório no GitHub está conectado a um projeto Vercel — push em `main` publica produção, pull request publica preview. Os arquivos da borda ficam na **raiz** (a Vercel só lê `vercel.json` e `api/` lá): `vercel.json` define build (`npm run build -w @cj/web`), saída (`apps/web/dist`), região `gru1`, headers de segurança (§12.6 da spec), cache de `/assets/*`, fallback de SPA e rewrite de `/api/*`.
+- **Função Node:** `api/[[...path]].ts` embrulha o Express do `@cj/api` com init lazy (pool + `LISTEN/NOTIFY` por instância) e `maxDuration: 300`. `TRUST_PROXY_HOPS` vira `1` automaticamente quando `process.env.VERCEL` (IP real em `req.ip`, §12.7); o OCR em background usa `waitUntil` de `@vercel/functions` (o `after()` da ADR-07) — a versão está pinada em `3.6.1` por advisory de segurança.
+- **Variáveis de ambiente:** configure por ambiente (Preview e Production) no dashboard da Vercel com as mesmas chaves do [`.env.example`](.env.example) / tabela acima; obrigatórios em produção `JOIN_TOKEN_KEYS`, `JOIN_TOKEN_CURRENT_KID`, `CRON_SECRET` (real), `AUDIT_HMAC_KEY`, `SUPABASE_URL`, `SUPABASE_STORAGE_KEY` e `DATABASE_URL`/`DATABASE_LISTEN_URL` do pooler com `?sslmode=no-verify`. `OCR_PROVIDER` fica `fake` até o adapter real (API-28).
+- **Crons:** agendador externo (cron-job.org, INF-11) chamando `POST /api/cron/*` com `Authorization: Bearer $CRON_SECRET` — não usar o Vercel Cron (a spec fecha com ADR-14).
+
 ## Notas conhecidas
 
 - `npm audit` reporta advisories em `vitest`/`tinypool`/`@vitest/mocker` (somente toolchain de teste). A correção disponível é `vitest@5` (breaking change) e não foi aplicada.

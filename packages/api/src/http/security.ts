@@ -5,14 +5,20 @@ import { HttpError, sendProblem } from './problem.js';
 import { hmacSha256 } from '../util/crypto.js';
 import type { Db } from '../db.js';
 
+/** CSP e demais cabeçalhos de §12.6 — mesmo valor do vercel.json (ADR-12). */
+const CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
 export function securityHeaders(): RequestHandler {
   return (_req, res, next) => {
+    res.setHeader('Content-Security-Policy', CSP);
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
     next();
   };
 }
@@ -29,8 +35,9 @@ export function originCheck(config: Config): RequestHandler {
   };
 }
 
+/** IP do cliente (§12.7): req.ip com trust proxy ativo; fallback ao socket em dev. */
 export function ipOf(req: Request): string {
-  return (req.socket.remoteAddress ?? 'unknown').replace(/^::ffff:/, '');
+  return (req.ip ?? req.socket.remoteAddress ?? 'unknown').replace(/^::ffff:/, '');
 }
 
 export function ipHmacOf(config: Config, req: Request): Buffer {

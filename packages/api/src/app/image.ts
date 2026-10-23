@@ -317,43 +317,58 @@ export function runOcrBackground(
   objectKey: string,
   _ipHmac: Buffer | null,
 ): void {
-  setImmediate(async () => {
-    const controller = new AbortController();
-    const budget = setTimeout(() => controller.abort(), 18_000);
-    setTimeout(() => {
-      void runSystemCommand(deps, billId, {
-        operationId: uuidv5(`EXPIRE_OCR_ATTEMPT:${attemptId}`),
-        command: { type: 'EXPIRE_OCR_ATTEMPT', attemptId },
-      }).catch(() => {});
-    }, 25_000);
-    try {
-      const bytes = await deps.storage.get(objectKey);
-      const extractor = createExtractor(process.env.OCR_PROVIDER ?? 'fake');
-      const started = Date.now();
-      const result = await extractor.extract(new Uint8Array(bytes), { signal: controller.signal });
-      if (!result.ok) {
-        await runSystemCommand(deps, billId, {
-          operationId: uuidv5(`FAIL_OCR:${attemptId}`),
-          command: { type: 'FAIL_OCR', attemptId, errorCode: result.code },
-        });
-        return;
-      }
-      const payload = receiptToApplyPayload(attemptId, result.receipt);
-      await runSystemCommand(deps, billId, {
-        operationId: uuidv5(`APPLY_OCR_RESULT:${attemptId}`),
-        command: { type: 'APPLY_OCR_RESULT', ...payload },
-      });
-      console.log(`[ocr] bill=${billId} providerMs=${Date.now() - started}`);
-    } catch (e) {
-      console.error('[ocr] falha', (e as Error).name);
+  const job = new Promise<void>((resolve) => {
+    setImmediate(() => {
+      void runOcrJob(deps, billId, attemptId, objectKey).then(resolve, resolve);
+    });
+  });
+  if (process.env.VERCEL) {
+    // serverless: a resposta já saiu; waitUntil segura a instância até o fim do OCR (§16.3)
+    void import('@vercel/functions').then(({ waitUntil }) => waitUntil(job)).catch(() => {});
+  }
+}
+
+async function runOcrJob(
+  deps: PipelineDeps,
+  billId: string,
+  attemptId: string,
+  objectKey: string,
+): Promise<void> {
+  const controller = new AbortController();
+  const budget = setTimeout(() => controller.abort(), 18_000);
+  setTimeout(() => {
+    void runSystemCommand(deps, billId, {
+      operationId: uuidv5(`EXPIRE_OCR_ATTEMPT:${attemptId}`),
+      command: { type: 'EXPIRE_OCR_ATTEMPT', attemptId },
+    }).catch(() => {});
+  }, 25_000);
+  try {
+    const bytes = await deps.storage.get(objectKey);
+    const extractor = createExtractor(process.env.OCR_PROVIDER ?? 'fake');
+    const started = Date.now();
+    const result = await extractor.extract(new Uint8Array(bytes), { signal: controller.signal });
+    if (!result.ok) {
       await runSystemCommand(deps, billId, {
         operationId: uuidv5(`FAIL_OCR:${attemptId}`),
-        command: { type: 'FAIL_OCR', attemptId, errorCode: 'OCR-02' },
-      }).catch(() => {});
-    } finally {
-      clearTimeout(budget);
+        command: { type: 'FAIL_OCR', attemptId, errorCode: result.code },
+      });
+      return;
     }
-  });
+    const payload = receiptToApplyPayload(attemptId, result.receipt);
+    await runSystemCommand(deps, billId, {
+      operationId: uuidv5(`APPLY_OCR_RESULT:${attemptId}`),
+      command: { type: 'APPLY_OCR_RESULT', ...payload },
+    });
+    console.log(`[ocr] bill=${billId} providerMs=${Date.now() - started}`);
+  } catch (e) {
+    console.error('[ocr] falha', (e as Error).name);
+    await runSystemCommand(deps, billId, {
+      operationId: uuidv5(`FAIL_OCR:${attemptId}`),
+      command: { type: 'FAIL_OCR', attemptId, errorCode: 'OCR-02' },
+    }).catch(() => {});
+  } finally {
+    clearTimeout(budget);
+  }
 }
 
 /** Conversão ExtractedReceipt → APPLY_OCR_RESULT (§9.1). */

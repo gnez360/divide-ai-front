@@ -21,7 +21,7 @@
     "dev:api": "npm run dev -w @cj/api",
     "dev:web": "npm run dev -w @cj/web",
     "cron": "node scripts/cron.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

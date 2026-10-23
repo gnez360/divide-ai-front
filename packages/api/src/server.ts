@@ -43,6 +43,7 @@ export async function createApp(config: Config = loadConfig()): Promise<App> {
 
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', config.trustProxyHops);
   app.use(securityHeaders());
   app.use(express.json({ limit: '256kb', strict: true }));
   app.use(originCheck(config));
