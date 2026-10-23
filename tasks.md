@@ -9,6 +9,32 @@
 
 **v2.0 (22/10/2026):** rework para a plataforma fechada da ADR-14 (Vercel + Supabase free, sem worker nem pg-boss): SPK-02 redefinida para SSE serverless, SPK-03 e DB-04 removidas, tasks de WRK viraram OCR-em-`after()` (API-28) e endpoints de cron (API-29), INF-02 a INF-05 reescritas para a Vercel, e OPS-02 nova (guardas do free tier).
 
+## 0. Status da implementação local (22/10/2026)
+
+Implementação local de ponta a ponta (fora da plataforma Vercel/Supabase da ADR-14), verificada com testes e smoke E2E no navegador:
+
+| Área | Entregue localmente | Verificação |
+|---|---|---|
+| FND | Monorepo npm workspaces (não pnpm); ESLint + Prettier + commitlint locais (sem CI); eslint@^9 por peers | `npm install`, `npm run typecheck`, `npm run lint`, `npm run format:check` (78 testes) |
+| DB | Migração manual `0001_init.sql` (não Drizzle). **Migrado do Docker 5433 para Supabase** (`us-east-1`, pooler, PG 17.11); `db/migrate.mjs` idempotente | migração aplicada no Supabase; RT3 (LISTEN/NOTIFY) validado no pooler; smoke ponta a ponta (criação→snapshot→SSE) gravando em `app.bills`; `sslmode=no-verify` (CA própria do Supabase + pg≥9 = verify-full) |
+| CTR | `@cj/contracts` com schemas `.strict()` + parse de comandos; **catálogo de textos pt-BR** (`errorMessages`, `statusTitles`, `problemMessages`, `domainMessages`, `ui` por tela em `src/ui/`) + lint de contenção (JSX/acentos) | 16 testes de unidade (inclui completude `ErrorCode → mensagem`); `npm run lint` zero no repo (223 → 0) |
+| CORE | Tipos, aritmética, Maior Resto, itens/partilhas, rateio, partes/I1, derivação, motor de comandos (22 comandos); **vetores canônicos** (25 JSON + runner) e **propriedades fast-check** (§11.J) | 82 testes verdes (`@cj/core`: calc 10, derive 12, execute 27, vetores 26, propriedades 7) |
+| OCR | `ReceiptExtractor` + `FakeExtractor` (`OCR_PROVIDER=fake`); parser/adapter reais fora do MVP local | 7 testes |
+| API | Fastify: criação, sessões/cookies `__Host-`, pipeline de comandos, snapshot, upload assinado + OCR em background, SSE, join/invite, crons (10 jobs), rate limit | 23 testes (inclui E2E completo) |
+| WEB | `apps/web`: scaffold (Vite7/React19/RR7/Tailwind4), cliente API, store + SSE, telas 01–27 navegáveis, modais de divisão, resumo compartilhável; PWA (SW+manifest+ícones+banner de atualização) | `tsc` + `vite build` + smoke E2E manual (2 abas, join por link, fechamento) + smoke do SW (offline shell, `/api` fora do cache, banner); **axe/Lighthouse a11y = 100 em 10 rotas** (target-size ≥ 44 px, landmarks, contraste ≥ 4.5:1) |
+| OPS | `scripts/dev.mjs`, `scripts/cron.mjs` (substitui cron-job.org em dev), `README.md` | dev subindo ponta a ponta |
+
+**Fora do alcance local:** CI (FND-03), Playwright/QA-02 (vetores em Chromium/WebKit — o runner é agnóstico e roda no Node), OBS-01.
+
+**Notas de implementação local (23/10/2026):**
+- **Supabase (INF-01 avançou):** banco migrado do Docker para o Supabase real (`us-east-1`, pooler transacional, PG 17.11). `LISTEN`/`NOTIFY` (RT3) validados direto no pooler. SSL exige `sslmode=no-verify` porque o Supabase usa CA própria (`Supabase Root 2021 CA`, fora do store do Node) e o `pg` ≥9 trata `require` como `verify-full`. `DATABASE_URL` e `DATABASE_LISTEN_URL` no `.env` apontam para o pooler; `db/migrate.mjs` segue idempotente. Falta Vercel (INF-02/03), Storage remoto (API-11) e crons de produção (INF-11).
+- **CORE-10:** 25 vetores em `packages/core/test/vectors/` (dataset, E-1, E-2, CA-A4, CA-C5 a–d, CA-C8, CA-C8b, CA-D2, CA-D4, CA-D6 a CA-D14 incl. CA-D9a/b e CA-D14 ±5) com gerador em `gen-vectors.ts` e runner que valida schema, determinismo e comandos (sem Playwright — QA-02).
+- **CORE-11:** 7 propriedades fast-check (§11.J) em `properties.test.ts`; seed aparece no falha por padrão.
+- **Saldo com sinal (§7.8):** `saldoNaoDistribuido = totalAPagar − Σ parte_p` é definicional no `derive` (não uma checagem); desconto sem dono **reduz** o saldo (`bySource.charges` com sinal) e gera `COBRANCA_SEM_RATEIO` quando não há itens sem dono que a absorvam. Descoberto pela propriedade de desconto do CORE-11.
+- **Gap de comando:** nenhum comando edita `splitAmong` de uma cobrança existente (os vetores D9/D12 montam o documento de entrada com a lista preenchida); `ADD_CHARGE`/`EDIT_CHARGE` criam/editam sem lista → FEE EQUAL fica com pendência `COBRANCA_SEM_RATEIO` até houver comando dedicado.
+- **Audit (23/10/2026):** 4 advisories, todos com fix só via major. `tinypool`/`@vitest/mocker`/`vitest` (dev-only) → vitest@5.0.5; `zod` (produção, high, DoS por coleção grande) → zod@4.6.7, sem fix na linha3 (3.25.76 é a mais recente). Mitigação atual: schemas `.max()`/`.limit()` de §9.1 + corpo HTTP limitado. Upgrade de zod4 e vitest5 = task dedicada (breaking: API de erros, `.strict()`, runner/config).
+
+
 **Como ler.** `§F5.8` aponta para `spec.md`; `§7.1` aponta para `spec_tecnica.md`; `CA-D8` é um critério de aceite do capítulo 11 de `spec.md`. Cada linha das tabelas é uma task do tamanho de um pull request (ou de uma entrega de design ou produto) e pode virar uma issue com o ID no título, a área e o marco como rótulos.
 
 **Tamanho** (estimativa relativa, uma pessoa): **P** até 1 dia · **M** 2 a 3 dias · **G** 4 a 5 dias · **-** fora de engenharia. Nenhuma task passa de G: o que passaria foi dividido. Recalibrar ao fim de M0.
