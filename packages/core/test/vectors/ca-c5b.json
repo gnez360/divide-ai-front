@@ -1,0 +1,115 @@
+{
+  "id": "ca-c5b",
+  "title": "CA-C5: percentual persiste — item passa a R$ 0,02 → 0,01/0,01",
+  "source": "spec.md CA-C5 (§11.C)",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": null,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000005",
+        "name": "Batata frita",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 1,
+        "splitMode": "CUSTOM_PERCENT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "percentBp": 5000
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "percentBp": 5000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "displayName": "Ray",
+        "avatar": {
+          "initial": "R",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000002",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 2,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "commands": [
+    {
+      "type": "EDIT_ITEM",
+      "itemId": "d1000000-0000-4000-8000-000000000005",
+      "lineTotal": 2
+    }
+  ],
+  "actor": "a1000000-0000-4000-8000-000000000001",
+  "expect": {
+    "shares": {
+      "a1000000-0000-4000-8000-000000000001": {
+        "amount": 1
+      },
+      "a1000000-0000-4000-8000-000000000002": {
+        "amount": 1
+      }
+    },
+    "items": {
+      "d1000000-0000-4000-8000-000000000005": {
+        "status": "SPLIT",
+        "unassigned": 0
+      }
+    }
+  }
+}

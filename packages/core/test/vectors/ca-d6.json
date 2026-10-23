@@ -1,0 +1,122 @@
+{
+  "id": "ca-d6",
+  "title": "CA-D6: desconto proporcional deixa A −30,00 → 422 NEGATIVE_SHARE, sem piso",
+  "source": "spec.md CA-D6 (§11.D), §7.10",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": null,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000005",
+        "name": "Consumo de A",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 10000,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "fixedAmount": 10000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [
+      {
+        "id": "c1000000-0000-4000-8000-000000000002",
+        "description": "Taxa",
+        "kind": "FEE",
+        "scope": "RECEIPT",
+        "amount": 10000,
+        "percentBp": null,
+        "amountSource": "MANUAL",
+        "origin": "MANUAL",
+        "distribution": "EQUAL_PER_PERSON",
+        "splitAmong": [
+          "a1000000-0000-4000-8000-000000000001",
+          "a1000000-0000-4000-8000-000000000002"
+        ],
+        "waiver": "NONE",
+        "waivedFor": [],
+        "confirmed": true,
+        "confirmedBy": null,
+        "reviewReason": null,
+        "version": 1
+      }
+    ],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "displayName": "Ray",
+        "avatar": {
+          "initial": "R",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000002",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 2,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "commands": [
+    {
+      "type": "ADD_CHARGE",
+      "description": "Desconto proporcional",
+      "kind": "DISCOUNT",
+      "amount": 18000,
+      "distribution": "PROPORTIONAL"
+    }
+  ],
+  "actor": "a1000000-0000-4000-8000-000000000001",
+  "expect": {
+    "error": "NEGATIVE_SHARE"
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "id": "ca-d8",
+  "title": "CA-D8: serviço de R$ 1,00 com item sem dono → 0,33/0,33 + saldo; atribuído a C, Maior Resto distribui os centavos",
+  "source": "spec.md CA-D8 (§11.D), §7.7.1",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": null,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000001",
+        "name": "A",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 1000,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "fixedAmount": 1000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000002",
+        "name": "B",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 1000,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "fixedAmount": 1000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000005",
+        "name": "Sem dono",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 1000,
+        "splitMode": null,
+        "allocations": [],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [
+      {
+        "id": "c1000000-0000-4000-8000-000000000001",
+        "description": "Serviço",
+        "kind": "FEE",
+        "scope": "RECEIPT",
+        "amount": 100,
+        "percentBp": null,
+        "amountSource": "MANUAL",
+        "origin": "MANUAL",
+        "distribution": "PROPORTIONAL",
+        "splitAmong": [],
+        "waiver": "NONE",
+        "waivedFor": [],
+        "confirmed": true,
+        "confirmedBy": null,
+        "reviewReason": null,
+        "version": 1
+      }
+    ],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "displayName": "Ray",
+        "avatar": {
+          "initial": "R",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000002",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 2,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000007",
+        "displayName": "Ana",
+        "avatar": {
+          "initial": "A",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000007",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 3,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "commands": [
+    {
+      "type": "SET_SPLIT",
+      "itemId": "d1000000-0000-4000-8000-000000000005",
+      "mode": "CUSTOM_AMOUNT",
+      "allocations": [
+        {
+          "participantId": "a1000000-0000-4000-8000-000000000007",
+          "fixedAmount": 1000
+        }
+      ]
+    }
+  ],
+  "actor": "a1000000-0000-4000-8000-000000000001",
+  "expect": {
+    "charges": {
+      "c1000000-0000-4000-8000-000000000001": {
+        "portions": {
+          "a1000000-0000-4000-8000-000000000001": 33,
+          "a1000000-0000-4000-8000-000000000002": 34
+        },
+        "unassigned": 0
+      }
+    },
+    "unallocated": {
+      "total": 0
+    },
+    "totals": {
+      "amountDue": 3100
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "id": "ca-d13",
+  "title": "CA-D13: 3 un · R$ 10,00 em TOTAL_LINHA distribuídas 1/1/1 → somam exatamente R$ 10,00",
+  "source": "spec.md CA-D13 (§11.D)",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": null,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000013",
+        "name": "Cerveja",
+        "quantity": 3,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 10000,
+        "splitMode": "BY_UNITS",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000003",
+            "units": 1
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "displayName": "Ray",
+        "avatar": {
+          "initial": "R",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000002",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 2,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "displayName": "Nath",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000003",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 3,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "expect": {
+    "shares": {
+      "a1000000-0000-4000-8000-000000000003": {
+        "amount": 3334
+      },
+      "a1000000-0000-4000-8000-000000000001": {
+        "amount": 3333
+      },
+      "a1000000-0000-4000-8000-000000000002": {
+        "amount": 3333
+      }
+    },
+    "items": {
+      "d1000000-0000-4000-8000-000000000013": {
+        "status": "SPLIT",
+        "unassigned": 0
+      }
+    }
+  }
+}

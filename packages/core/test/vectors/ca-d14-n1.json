@@ -1,0 +1,318 @@
+{
+  "id": "ca-d14-n1",
+  "title": "CA-D14: ajuste de conciliação n1 sobre o estado final — determinístico, sem parte negativa, Σ = total impresso",
+  "source": "spec.md CA-D14 (§11.D), §7.7.4",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": 23099,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000001",
+        "name": "Pizza Margherita",
+        "quantity": 1,
+        "priceMode": "UNIT_PRICE",
+        "unitPrice": 12000,
+        "lineTotal": 12000,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "fixedAmount": 4000
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "fixedAmount": 4000
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000003",
+            "fixedAmount": 4000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000002",
+        "name": "Cerveja",
+        "quantity": 4,
+        "priceMode": "UNIT_PRICE",
+        "unitPrice": 900,
+        "lineTotal": 3600,
+        "splitMode": "BY_UNITS",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000003",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000004",
+            "units": 1
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000003",
+        "name": "Refrigerante",
+        "quantity": 4,
+        "priceMode": "UNIT_PRICE",
+        "unitPrice": 600,
+        "lineTotal": 2400,
+        "splitMode": "BY_UNITS",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000004",
+            "units": 1
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000005",
+            "units": 2
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000006",
+            "units": 1
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      },
+      {
+        "id": "d1000000-0000-4000-8000-000000000004",
+        "name": "Batata frita",
+        "quantity": 1,
+        "priceMode": "UNIT_PRICE",
+        "unitPrice": 3000,
+        "lineTotal": 3000,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "fixedAmount": 1000
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000002",
+            "fixedAmount": 1000
+          },
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000003",
+            "fixedAmount": 1000
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [
+      {
+        "id": "c1000000-0000-4000-8000-000000000001",
+        "description": "Serviço 10%",
+        "kind": "FEE",
+        "scope": "RECEIPT",
+        "amount": 2100,
+        "percentBp": null,
+        "amountSource": "PRINTED",
+        "origin": "MANUAL",
+        "distribution": "PROPORTIONAL",
+        "splitAmong": [],
+        "waiver": "NONE",
+        "waivedFor": [],
+        "confirmed": true,
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "reviewReason": null,
+        "version": 1
+      }
+    ],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "displayName": "Ray",
+        "avatar": {
+          "initial": "R",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000002",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 2,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "displayName": "Nath",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000003",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 3,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "displayName": "Davi",
+        "avatar": {
+          "initial": "D",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000004",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 4,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "displayName": "Thais",
+        "avatar": {
+          "initial": "T",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000005",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 5,
+        "anonymized": false,
+        "version": 1
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000006",
+        "displayName": "Gabriel",
+        "avatar": {
+          "initial": "G",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000006",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 6,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "expect": {
+    "totals": {
+      "difference": -1,
+      "reconciliationAdjustment": -1,
+      "reconciledTotal": 23099,
+      "amountDue": 23099
+    },
+    "shares": {
+      "a1000000-0000-4000-8000-000000000006": {
+        "amount": 660,
+        "adjustment": 0
+      },
+      "a1000000-0000-4000-8000-000000000001": {
+        "amount": 6490,
+        "adjustment": 0
+      },
+      "a1000000-0000-4000-8000-000000000002": {
+        "amount": 6489,
+        "adjustment": -1
+      },
+      "a1000000-0000-4000-8000-000000000003": {
+        "amount": 6490,
+        "adjustment": 0
+      },
+      "a1000000-0000-4000-8000-000000000004": {
+        "amount": 1650,
+        "adjustment": 0
+      },
+      "a1000000-0000-4000-8000-000000000005": {
+        "amount": 1320,
+        "adjustment": 0
+      }
+    },
+    "blockers": []
+  }
+}

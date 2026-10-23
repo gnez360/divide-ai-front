@@ -1,0 +1,106 @@
+{
+  "id": "ca-d4",
+  "title": "CA-D4: itens R$ 123,45 e serviço 10% sem valor impresso → R$ 12,35 (meio para cima)",
+  "source": "spec.md CA-D4 (§11.D), §7.1",
+  "document": {
+    "schemaVersion": 1,
+    "id": "b1000000-0000-4000-8000-000000000001",
+    "status": "OPEN",
+    "createdBy": "a1000000-0000-4000-8000-000000000001",
+    "details": {
+      "version": 1
+    },
+    "printedTotal": null,
+    "seatLimit": 8,
+    "ocrAttempt": null,
+    "items": [
+      {
+        "id": "d1000000-0000-4000-8000-000000000009",
+        "name": "Consumo",
+        "quantity": 1,
+        "priceMode": "LINE_TOTAL",
+        "unitPrice": null,
+        "lineTotal": 12345,
+        "splitMode": "CUSTOM_AMOUNT",
+        "allocations": [
+          {
+            "participantId": "a1000000-0000-4000-8000-000000000001",
+            "fixedAmount": 12345
+          }
+        ],
+        "origin": "MANUAL",
+        "deletedAt": null,
+        "deletedBy": null,
+        "version": 1
+      }
+    ],
+    "charges": [
+      {
+        "id": "c1000000-0000-4000-8000-000000000006",
+        "description": "Serviço 10%",
+        "kind": "FEE",
+        "scope": "RECEIPT",
+        "amount": 0,
+        "percentBp": 1000,
+        "amountSource": "FROM_PERCENT",
+        "origin": "MANUAL",
+        "distribution": "PROPORTIONAL",
+        "splitAmong": [],
+        "waiver": "NONE",
+        "waivedFor": [],
+        "confirmed": true,
+        "confirmedBy": null,
+        "reviewReason": null,
+        "version": 1
+      }
+    ],
+    "participants": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "displayName": "Nery",
+        "avatar": {
+          "initial": "N",
+          "color": "blue"
+        },
+        "status": "ACTIVE",
+        "consumptionConfirmed": true,
+        "confirmationSource": "SELF",
+        "confirmedBy": "a1000000-0000-4000-8000-000000000001",
+        "confirmedAt": "2026-10-23T12:00:00.000Z",
+        "consumptionVersion": 0,
+        "closedShareAmount": null,
+        "shareClosedAt": null,
+        "preRegisteredBy": null,
+        "joinedAt": "2026-10-23T12:00:00.000Z",
+        "joinOrder": 1,
+        "anonymized": false,
+        "version": 1
+      }
+    ],
+    "claims": [],
+    "receiptConfirmedAt": "2026-10-23T12:00:00.000Z",
+    "closedAt": null,
+    "createdAt": "2026-10-23T12:00:00.000Z"
+  },
+  "expect": {
+    "charges": {
+      "c1000000-0000-4000-8000-000000000006": {
+        "portions": {
+          "a1000000-0000-4000-8000-000000000001": 1235
+        },
+        "base": 12345,
+        "unassigned": 0
+      }
+    },
+    "shares": {
+      "a1000000-0000-4000-8000-000000000001": {
+        "consumption": 12345,
+        "amount": 13580
+      }
+    },
+    "totals": {
+      "itemsTotal": 12345,
+      "receiptTotal": 13580
+    }
+  }
+}
