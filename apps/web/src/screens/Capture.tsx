@@ -7,10 +7,13 @@ import { Button, Banner, Screen } from '../ui';
 
 type Phase = 'pick' | 'preview' | 'processing' | 'failed';
 
+const ACCEPTED = 'image/jpeg,image/png,image/webp,image/heic,image/heif';
+
 export default function Capture() {
   const { billId, snapshot, me, send } = useBill();
   const nav = useNavigate();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('pick');
@@ -115,7 +118,7 @@ export default function Capture() {
 
   if (phase === 'processing' || status === 'OCR_PROCESSING') {
     return (
-      <Screen title={ui.capture.processingTitle} back=".">
+      <Screen title={ui.capture.processingTitle} back="/">
         {error ? <Banner tone="error">{error}</Banner> : null}
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16" role="status">
           <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-700 border-t-sky-400" />
@@ -139,7 +142,7 @@ export default function Capture() {
   if (phase === 'failed') {
     const errorCode = snapshot.document.ocrAttempt?.errorCode;
     return (
-      <Screen title={ui.capture.failedTitle} back=".">
+      <Screen title={ui.capture.failedTitle} back="/">
         <Banner tone="error">
           {ui.capture.failedMessage}
           {errorCode ? ui.capture.errorCodeSuffix(errorCode) : ''}
@@ -166,7 +169,7 @@ export default function Capture() {
   return (
     <Screen
       title={phase === 'preview' ? ui.capture.previewTitle : ui.capture.captureTitle}
-      back={phase === 'preview' ? undefined : '.'}
+      back={phase === 'preview' ? undefined : '/'}
     >
       {error ? <Banner tone="error">{error}</Banner> : null}
 
@@ -199,18 +202,35 @@ export default function Capture() {
             {ui.capture.positionHint}
           </div>
           <input
-            ref={fileRef}
+            ref={cameraRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            accept={ACCEPTED}
             capture="environment"
             className="hidden"
-            onChange={(e) => pick(e.target.files?.[0])}
+            onChange={(e) => {
+              pick(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            accept={ACCEPTED}
+            className="hidden"
+            onChange={(e) => {
+              pick(e.target.files?.[0]);
+              e.target.value = '';
+            }}
           />
           <div className="flex w-full gap-3">
-            <Button className="flex-1" onClick={() => fileRef.current?.click()}>
+            <Button className="flex-1" onClick={() => cameraRef.current?.click()}>
               {ui.capture.photoButton}
             </Button>
-            <Button variant="secondary" className="flex-1" onClick={() => fileRef.current?.click()}>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => galleryRef.current?.click()}
+            >
               {ui.capture.galleryButton}
             </Button>
           </div>

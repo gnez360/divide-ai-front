@@ -65,7 +65,7 @@ export default function Final() {
 
   if (doc.status === 'CLOSED') {
     return (
-      <Screen title={ui.final.finalizedTitle} back=".">
+      <Screen title={ui.final.finalizedTitle} back="..">
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-center">
           <p className="text-3xl">✅</p>
           <p className="mt-2 font-semibold">
@@ -113,7 +113,7 @@ export default function Final() {
   );
 
   return (
-    <Screen title={ui.final.reviewTitle} back=".">
+    <Screen title={ui.final.reviewTitle} back="..">
       {error ? <Banner tone="error">{error}</Banner> : null}
 
       <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-sm">

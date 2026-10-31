@@ -57,7 +57,7 @@ export default function Invite() {
   };
 
   return (
-    <Screen title={ui.invite.screenTitle} back=".">
+    <Screen title={ui.invite.screenTitle} back="..">
       <p className="text-sm text-slate-400">{ui.invite.inviteHint}</p>
       {error ? <Banner tone="error">{error}</Banner> : null}
 
