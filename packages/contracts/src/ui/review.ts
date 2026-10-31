@@ -4,6 +4,8 @@
   invalidPrintedTotalError: 'Total impresso inválido.',
   screenTitle: 'Conferir comanda',
   viewReceipt: 'Ver comanda',
+  closeReceiptViewer: 'Fechar',
+  zoomReceipt: 'Zoom',
   divergenceTitle: '⚠ Os valores não conferem',
   calculated: 'Calculado',
   totalPrinted: 'Total impresso',

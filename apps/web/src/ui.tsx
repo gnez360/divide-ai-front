@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ui } from '@cj/contracts';
 
@@ -72,6 +72,61 @@ export function Screen({
         {action}
       </header>
       <main className="flex flex-1 flex-col gap-4">{children}</main>
+    </div>
+  );
+}
+
+export function ReceiptViewer({
+  src,
+  title,
+  onClose,
+}: {
+  src: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div
+      className="fixed inset-0 z-40 flex flex-col bg-black/95"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-slate-800 bg-slate-950 px-4 py-2">
+        <p className="truncate text-sm font-medium text-slate-200">{title}</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => !z)}
+            aria-pressed={zoom}
+            className="min-h-11 rounded-lg border border-slate-700 px-3 text-xs text-slate-300"
+          >
+            {ui.review.zoomReceipt}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 rounded-lg border border-slate-700 px-3 text-xs text-slate-300"
+          >
+            {ui.review.closeReceiptViewer}
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto p-3" onClick={() => setZoom((z) => !z)}>
+        <img
+          src={src}
+          alt={title}
+          className={`mx-auto rounded-lg ${zoom ? 'w-[200%] max-w-none' : 'max-w-full'}`}
+        />
+      </div>
     </div>
   );
 }

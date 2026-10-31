@@ -5,7 +5,7 @@ import { derive } from '@cj/core';
 import { api } from '../api';
 import { useBill } from '../state';
 import { money, qty } from '../lib/format';
-import { Button, Banner, Screen } from '../ui';
+import { Button, Banner, ReceiptViewer, Screen } from '../ui';
 
 function fmtCents(c: number | null): string {
   return c == null ? '' : (c / 100).toFixed(2).replace('.', ',');
@@ -24,6 +24,7 @@ export default function Review() {
   const [editing, setEditing] = useState<Item | null>(null);
   const [printed, setPrinted] = useState(fmtCents(doc.printedTotal));
   const [adding, setAdding] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const totalRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -79,17 +80,23 @@ export default function Review() {
       back={doc.status === 'RECEIPT_REVIEW' ? undefined : 'itens'}
       action={
         snapshot.hasImage ? (
-          <a
-            href={api.imageUrl(billId)}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300"
+          <button
+            type="button"
+            onClick={() => setShowReceipt(true)}
+            className="min-h-11 rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300"
           >
             {ui.review.viewReceipt}
-          </a>
+          </button>
         ) : undefined
       }
     >
+      {showReceipt ? (
+        <ReceiptViewer
+          src={api.imageUrl(billId)}
+          title={ui.review.viewReceipt}
+          onClose={() => setShowReceipt(false)}
+        />
+      ) : null}
       {error ? <Banner tone="error">{error}</Banner> : null}
       {hasDivergence ? (
         <section

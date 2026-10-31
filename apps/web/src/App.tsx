@@ -17,37 +17,10 @@ import People from './screens/People';
 import MyShare from './screens/MyShare';
 import Final from './screens/Final';
 
-/** Banner "Nova versão disponível" com [Atualizar] (WEB-38). */
-function UpdateBanner() {
-  const { needRefresh, updateServiceWorker } = useRegisterSW({ immediate: true });
-  const [refresh, setRefresh] = needRefresh;
-  if (!refresh) return null;
-  return (
-    <div
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-sky-500/40 bg-slate-900/95 p-3 backdrop-blur"
-      role="status"
-    >
-      <div className="mx-auto flex max-w-md items-center justify-between gap-3">
-        <span className="text-sm text-slate-200">{ui.shell.updateAvailable}</span>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => void updateServiceWorker()}
-            className="rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-slate-950"
-          >
-            {ui.shell.updateNow}
-          </button>
-          <button
-            type="button"
-            onClick={() => setRefresh(false)}
-            className="rounded-lg px-3 py-2 text-sm text-slate-400"
-          >
-            {ui.shell.updateLater}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+/** Registra o SW com atualização automática silenciosa (WEB-38). */
+function UseSwUpdate() {
+  useRegisterSW({ immediate: true });
+  return null;
 }
 
 function BillGate({ children }: { children: React.ReactNode }) {
@@ -103,6 +76,7 @@ function StatusGate() {
 }
 
 export default function App() {
+  UseSwUpdate();
   return (
     <>
       <Routes>
@@ -127,7 +101,6 @@ export default function App() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <UpdateBanner />
     </>
   );
 }
