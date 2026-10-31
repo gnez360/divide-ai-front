@@ -9,9 +9,11 @@ import {
   uuidv5,
   sha256,
 } from '../src/util/crypto.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config.js';
+import { originCheck } from '../src/http/security.js';
 import { errorCodes, errorMessages, statusTitles } from '@cj/contracts';
 import type { ExtractedReceipt } from '@cj/ocr';
+import type { Request } from 'express';
 
 const config = loadConfig();
 const BILL = 'a1000000-0000-4000-8000-000000000001';
@@ -168,5 +170,38 @@ describe('catálogo CTR-02', () => {
     for (const status of [400, 401, 403, 404, 409, 413, 415, 422, 429, 500, 503]) {
       expect(statusTitles[status as keyof typeof statusTitles]).toBeTruthy();
     }
+  });
+});
+
+describe('originCheck (§6.1)', () => {
+  const cfg = (isProd: boolean): Config =>
+    ({ appOrigins: ['https://app.example'], isProd }) as Config;
+  const run = (
+    req: { method?: string; protocol?: string; headers: Record<string, string | undefined> },
+    isProd = true,
+  ): unknown => {
+    const errs: unknown[] = [];
+    originCheck(cfg(isProd))(req as unknown as Request, {} as never, (err?: unknown) => {
+      if (err !== undefined) errs.push(err);
+    });
+    return errs[0] ?? 'next';
+  };
+
+  it('aceita Origin da lista APP_ORIGINS', () => {
+    expect(run({ headers: { origin: 'https://app.example', host: 'outro.example' } })).toBe('next');
+  });
+
+  it('aceita same-origin (host + scheme do próprio request)', () => {
+    expect(
+      run({
+        protocol: 'https',
+        headers: { origin: 'https://proj.vercel.app', host: 'proj.vercel.app' },
+      }),
+    ).toBe('next');
+  });
+
+  it('rejeita origem estranha em produção', () => {
+    const err = run({ headers: { origin: 'https://malicioso.example', host: 'proj.vercel.app' } });
+    expect(err).toMatchObject({ status: 403 });
   });
 });

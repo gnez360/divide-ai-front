@@ -450,6 +450,16 @@ describe('API — fluxo ponta a ponta', () => {
     expect(r.status).toBe(403);
   });
 
+  it('origin same-origin → aceito sem depender de APP_ORIGINS', async (ctx: TestContext) => {
+    if (!ready) return ctx.skip();
+    const r = await j('/api/bills', {
+      method: 'POST',
+      body: JSON.stringify({ operationId: randomUUID(), displayName: 'X', avatar }),
+      headers: { origin: base },
+    });
+    expect(r.status).toBe(201);
+  });
+
   it('crons: com segredo 200, sem segredo 404', async (ctx: TestContext) => {
     if (!ready) return ctx.skip();
     const ok = await fetch(`${base}/api/cron/purge-events`, {

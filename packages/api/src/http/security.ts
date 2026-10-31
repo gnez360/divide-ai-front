@@ -23,12 +23,22 @@ export function securityHeaders(): RequestHandler {
   };
 }
 
+/** Origem do request igual à própria origem (host + scheme) — §6.1 sob o domínio único da Vercel. */
+function isSameOrigin(req: Request, origin: string): boolean {
+  try {
+    const o = new URL(origin);
+    return o.host === req.headers.host && o.protocol === `${req.protocol}:`;
+  } catch {
+    return false;
+  }
+}
+
 /** Toda mutação exige Origin igual à origem do app (§6.1); GET não altera estado. */
 export function originCheck(config: Config): RequestHandler {
   return (req, _res, next) => {
     if (req.method === 'GET' || req.method === 'HEAD') return next();
     const origin = req.headers.origin;
-    if (origin && config.appOrigins.includes(origin)) return next();
+    if (origin && (config.appOrigins.includes(origin) || isSameOrigin(req, origin))) return next();
     // requisições same-origin de ferramentas sem Origin (curl no smoke) são aceitas fora de produção
     if (!origin && !config.isProd) return next();
     next(new HttpError(403, 'FORBIDDEN', problemMessages.originNotAllowed));
