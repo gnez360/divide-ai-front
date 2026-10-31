@@ -319,7 +319,12 @@ export function apiRouter(deps: AppDeps): Router {
         return;
       }
       const token = mintJoinToken(config, actor.billId, bill.join_token_version);
-      const origin = config.appOrigins[0] ?? 'http://localhost:5173';
+      // origem do próprio request (Host + X-Forwarded-Proto): funciona em preview,
+      // produção e domínio próprio sem depender de APP_ORIGINS
+      const host = req.headers.host;
+      const origin = host
+        ? `${req.protocol}://${host}`
+        : (config.appOrigins[0] ?? 'http://localhost:5173');
       noStore(res);
       res.json({ url: `${origin}/entrar#t=${token}`, token });
     }),
