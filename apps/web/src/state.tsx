@@ -78,8 +78,18 @@ export function BillProvider({
       });
       es.addEventListener('bill', (ev) => {
         try {
-          const data = JSON.parse((ev as MessageEvent).data) as { snapshot?: BillSnapshot };
-          if (data.snapshot) setSnapshot(data.snapshot);
+          const data = JSON.parse((ev as MessageEvent).data) as {
+            snapshot?: Omit<BillSnapshot, 'presence'> & {
+              presence?: BillSnapshot['presence'];
+            };
+          };
+          if (data.snapshot) {
+            const incoming = data.snapshot;
+            setSnapshot((s) => ({
+              ...incoming,
+              presence: incoming.presence ?? s.presence ?? {},
+            }));
+          }
         } catch {
           /* payload malformado: ignora */
         }
