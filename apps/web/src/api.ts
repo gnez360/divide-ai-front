@@ -29,13 +29,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: 'same-origin',
   });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = null; // corpo não-JSON (página de erro da plataforma/proxy)
+    }
+  }
   if (!res.ok) {
     throw new ApiError(
       res.status,
-      body?.code ?? 'ERROR',
-      body?.message ?? res.statusText,
-      body?.details,
+      (body as { code?: string } | null)?.code ?? 'ERROR',
+      (body as { message?: string } | null)?.message ?? res.statusText,
+      (body as { details?: unknown } | null)?.details,
     );
   }
   return body as T;
