@@ -13,6 +13,15 @@ function tokenFromLocation(): string {
   return q ?? '';
 }
 
+function tokenFromPasted(value: string): string {
+  const v = value
+    .trim()
+    .replace(/^[<'"]+/, '')
+    .replace(/[>'"]+$/, '');
+  const m = v.match(/[#&?]t=([^&#\s]+)/);
+  return m ? m[1]! : v;
+}
+
 function norm(s: string): string {
   return s
     .normalize('NFD')
@@ -32,15 +41,16 @@ export default function Join() {
   const [busy, setBusy] = useState(false);
 
   const resolve = async (value: string) => {
+    const t = tokenFromPasted(value);
     setError('');
     try {
-      const r = (await api.resolveJoin(value)) as unknown as JoinPreview & {
+      const r = (await api.resolveJoin(t)) as unknown as JoinPreview & {
         billId: string;
         hasSession: boolean;
       };
       setPreview(r);
       setBillId(r.billId);
-      setToken(value);
+      setToken(t);
       if (r.hasSession && r.billId) void nav(`/conta/${r.billId}`);
     } catch (e) {
       setError((e as Error).message || ui.join.invalidLinkFallback);
